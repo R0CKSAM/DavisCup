@@ -275,6 +275,17 @@ def register(namespace):
         band_x_pct=50,band_y_pct=50,band_size_pct=100,
         panel_width_pct=48,panel_height_pct=88,text_styles={},rows=[])
 
+    defaults['t21']['row_count']=5
+    for i in range(6,13):
+        defaults['t21']['player_'+str(i)]=''
+    defaults['t22']=dict(defaults['t21'],template='t22',country_a='Belgium',country_b='Italy',
+        panel_width_pct=88,panel_height_pct=82,
+        player_header_a='PLAYER',ranking_header_a='RANKING',player_header_b='PLAYER',ranking_header_b='RANKING')
+    for i in range(1,13):
+        for side in ('a','b'):
+            defaults['t22']['name_'+side+'_'+str(i)]=''
+            defaults['t22']['rank_'+side+'_'+str(i)]=''
+
     def render_player_list(cfg):
         W,H=c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
         source=c.load_photo(cfg.get('background_path') or str(root/'player_list_background.png'))
@@ -298,7 +309,8 @@ def register(namespace):
         border=max(1,round(W/960))
         draw.rectangle((0,0,pw-1,ph-1),outline=tuple(cfg['border_color']),width=border)
         pad=round(pw*.065)
-        draw.rectangle((pad,round(ph*.255),pw-pad,round(ph*.259)),fill=tuple(cfg['accent_color']))
+        if cfg['template']=='t21':
+            draw.rectangle((pad,round(ph*.255),pw-pad,round(ph*.259)),fill=tuple(cfg['accent_color']))
 
         def label(role,value,y,max_height,size,color,uppercase=False):
             value=c.apply_text_case(cfg,role,str(value))
@@ -315,6 +327,46 @@ def register(namespace):
             for i,line in enumerate(lines):
                 c.draw_text(draw,(pad,round(y+(i-(len(lines)-1)/2)*size*1.15)),line,factory(size),color,anchor='lm')
 
+        if cfg['template']=='t22':
+            count=int(c.clamp_number(cfg.get('row_count'),1,12,5))
+            def cell(role,value,x,y,width,height,size,color):
+                value=c.apply_text_case(cfg,role,' '.join(str(value).split()))
+                color,size=c.styled_text(cfg,role,tuple(color),round(size))
+                factory=c.text_font_factory(cfg,role,'bold',value)
+                font=c.fit_font(draw,value,max(1,round(width)),size,minimum=1,factory=factory)
+                while c.text_bbox(draw,value,font)[1]>height and font.size>1:
+                    font=factory(font.size-1)
+                c.draw_text(draw,(round(x),round(y)),value,font,color,anchor='lm')
+            margin=pw*.035
+            half=pw*.5
+            row_h=ph*.64/count
+            for side,offset in (('a',0),('b',half)):
+                country=cfg.get('country_'+side,'')
+                code=c.qualifier_country_code(country)
+                if code:
+                    with zipfile.ZipFile(root/'country_flags.zip') as archive:
+                        flag=Image.open(io.BytesIO(archive.read(code+'.png'))).convert('RGBA')
+                    flag.thumbnail((max(1,round(pw*.07)),max(1,round(ph*.075))),Image.Resampling.LANCZOS)
+                    panel.alpha_composite(flag,(round(offset+margin),round(ph*.06)))
+                cell('country_'+side,country.upper(),offset+pw*.125,ph*.098,pw*.34,ph*.095,ph*.055,cfg['country_color'])
+                draw.line((round(offset+margin),round(ph*.18),round(offset+half-margin),round(ph*.18)),fill=tuple(cfg['accent_color']),width=max(2,round(H/270)))
+                cell('headers',cfg['player_header_'+side],offset+margin,ph*.24,pw*.265,ph*.05,ph*.029,cfg['accent_color'])
+                cell('headers',cfg['ranking_header_'+side],offset+pw*.335,ph*.24,pw*.13,ph*.05,ph*.029,cfg['accent_color'])
+                for i in range(count):
+                    y=ph*.31+row_h*(i+.5)
+                    cell('name_'+side+'_'+str(i+1),cfg.get('name_'+side+'_'+str(i+1),''),offset+margin,y,pw*.275,row_h*.72,ph*.037,cfg['panel_text_color'])
+                    cell('rank_'+side+'_'+str(i+1),cfg.get('rank_'+side+'_'+str(i+1),''),offset+pw*.335,y,pw*.13,row_h*.72,ph*.035,cfg['panel_text_color'])
+                    if i<count-1:
+                        yy=round(ph*.31+row_h*(i+1))
+                        draw.line((round(offset+margin),yy,round(offset+half-margin),yy),fill=tuple(cfg['divider_color']),width=max(1,round(H/1080)))
+                xx=round(offset+pw*.32)
+                draw.line((xx,round(ph*.21),xx,round(ph*.95)),fill=tuple(cfg['divider_color']),width=max(1,round(H/1080)))
+            draw.line((round(half),round(ph*.045),round(half),round(ph*.95)),fill=tuple(cfg['border_color']),width=max(1,round(W/960)))
+            cx=W*c.clamp_number(cfg.get('band_x_pct'),-50,150,50)/100
+            cy=H*c.clamp_number(cfg.get('band_y_pct'),-50,150,50)/100
+            image.alpha_composite(panel,(round(cx-pw/2),round(cy-ph/2)))
+            return image.convert('RGB')
+
         country=cfg.get('country','')
         code=c.qualifier_country_code(country)
         if code:
@@ -323,11 +375,13 @@ def register(namespace):
             flag.thumbnail((round(pw*.17),round(ph*.085)),Image.Resampling.LANCZOS)
             panel.alpha_composite(flag,(pad,round(ph*.045)))
         label('country',country,ph*.19,ph*.115,ph*.061,cfg['country_color'],True)
-        for index in range(5):
-            y=ph*(.325+index*.14)
-            label('player_'+str(index+1),cfg.get('player_'+str(index+1),''),y,ph*.095,ph*.041,cfg['panel_text_color'])
-            if index<4:
-                line_y=round(ph*(.395+index*.14))
+        count=int(c.clamp_number(cfg.get('row_count'),1,12,5))
+        row_h=ph*.70/count
+        for index in range(count):
+            y=ph*.255+row_h*(index+.5)
+            label('player_'+str(index+1),cfg.get('player_'+str(index+1),''),y,row_h*.72,ph*.041,cfg['panel_text_color'])
+            if index<count-1:
+                line_y=round(ph*.255+row_h*(index+1))
                 draw.line((pad,line_y,pw-pad,line_y),fill=tuple(cfg['divider_color']),width=max(1,round(H/1080)))
         cx=W*c.clamp_number(cfg.get('band_x_pct'),-50,150,50)/100
         cy=H*c.clamp_number(cfg.get('band_y_pct'),-50,150,50)/100
@@ -529,7 +583,7 @@ def register(namespace):
 
     def render(cfg):
         key = cfg['template']
-        if key == 't21':
+        if key in ('t21','t22'):
             return render_player_list(cfg)
         if key == 't20':
             return render_qualifier_band(cfg)
@@ -708,6 +762,7 @@ def register(namespace):
         ('player_a','Left player name'),('player_b','Right player name'),('versus','VS'),
         ('country_a','Left country'),('country_b','Right country')]
     namespace['TEXT_STYLE_TARGETS']['t20']=[('all','All text'),('title','Title'),('date_text','Date'),('country_a','Left country'),('country_b','Right country'),('score_a','Left score'),('score_b','Right score')]
-    namespace['TEXT_STYLE_TARGETS']['t21']=[('all','All text'),('country','Country')]+[('player_'+str(i),'Player '+str(i)) for i in range(1,6)]
+    namespace['TEXT_STYLE_TARGETS']['t21']=[('all','All text'),('country','Country')]+[('player_'+str(i),'Player '+str(i)) for i in range(1,13)]
+    namespace['TEXT_STYLE_TARGETS']['t22']=[('all','All text'),('country_a','Left country'),('country_b','Right country'),('headers','Column headings')]+[(field+'_'+side+'_'+str(i),('Left' if side=='a' else 'Right')+' '+field+' '+str(i)) for side in ('a','b') for i in range(1,13) for field in ('name','rank')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List']
+    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List','COUNTRY VS']
