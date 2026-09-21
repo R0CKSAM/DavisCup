@@ -1,77 +1,83 @@
-# Veto OTT
+# Veto Broadcast Project Archive
 
-Windows broadcast graphics application with separate Davis Cup and Billie Jean
-King Cup template libraries, preview queues, and DeckLink output.
+This repository mirrors the project folders on the broadcast PC's `D:\` drive.
+The active application remains **`D:\Veto OTT`**. Git's root is **`D:\`**; no
+application folders have been moved.
 
-## Repository Layout
+## Folders
 
-On the broadcast PC, the Git repository is `D:\` and the active application stays
-in `D:\Veto OTT`. No app files need to move. Only the explicitly allowed source
-files and required graphic assets are eligible for tracking.
+| Folder | Contents |
+| --- | --- |
+| `Veto OTT` | Active application, graphics assets and current saved data |
+| `Veto Live` | Older application source and its uploaded assets |
+| `old` | Earlier source snapshot |
+| `older` | Earlier source snapshot |
+| `Veto` | Note identifying the local diagnostics folder; crash reports excluded |
 
-Older folders (`Veto Live`, `Veto`, `old`, `older`), archives, installed packages,
-FFmpeg binaries, shortcuts, logs, backups and the entire application `data`
-directory are excluded. Do not use `git add -f` to bypass these exclusions.
+Current template JSON, competition libraries and uploaded media are included.
+Browser-local recovery drafts and queues are not files in this repository.
+Protected legacy projects are exported to `Veto OTT/project_exports` without
+their password records; their original local files are left untouched.
+Two saved presets containing credentials in their metadata are also excluded;
+their exact local paths are listed in `.gitignore`.
 
-This repository is a **code backup**, not a backup of the saved presets, uploaded
-media, credentials or browser drafts. Back up `Veto OTT\data` separately and
-privately to preserve both competition libraries and their uploaded assets.
+## Deliberate Exclusions
 
-## Run on This PC
+- Credentials, password records, environment secrets and private keys.
+- Windows system folders, Git metadata and browser profiles.
+- Installed Python dependencies, offline wheels, FFmpeg binaries and caches.
+- Logs, crash dumps, historical backups and temporary development/test folders.
+- Local shortcuts, process IDs and machine-specific Python paths.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\Veto OTT\start_scoreboard.ps1"
-```
+Do not use `git add -f` to bypass these protections. This is a project/data
+archive, not an exact drive image. Review new uploads and saved data for private
+content before each push, particularly when using a public GitHub repository.
 
-Dashboard: http://127.0.0.1:8080/scoreboard
+## Setup and Restore
 
-Do not restart or replace application code while SDI output is active.
+Install 64-bit Python 3.14 with pip and Tcl/Tk. Install FFmpeg separately for video
+playback/export, in PATH or at `Veto OTT/tools/ffmpeg/bin/ffmpeg.exe`. SDI requires
+compatible DeckLink hardware and the Blackmagic Desktop Video driver.
 
-## Fresh Installation
-
-Install 64-bit Python 3.14 with pip and Tcl/Tk. From the cloned repository run:
+On a new machine, restore sanitized legacy collections before first startup by
+placing `Veto OTT/project_exports/*.json` in `Veto OTT/data/projects`. Never
+overwrite existing projects or credential files on an operational installation.
+Then run from the repository root:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\Veto OTT\setup_scoreboard.ps1" -NoStart
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\Veto OTT\start_scoreboard.ps1"
 ```
 
-Setup downloads dependencies when offline wheels are absent. Install FFmpeg
-separately for video playback/export, either in PATH or at
-`Veto OTT\tools\ffmpeg\bin\ffmpeg.exe`. Physical SDI also requires compatible
-DeckLink hardware and the Blackmagic Desktop Video driver. Machine-specific
-Windows shortcuts are not part of the Git checkout.
+Setup installs Python dependencies from pip when offline wheels are absent.
+The dashboard is http://127.0.0.1:8080/scoreboard.
 
-New installations generate unique editor and delete passwords. Read them locally
-from `Veto OTT\data\first_run_credentials.json`, store them privately, and remove
-that plaintext recovery file once they are recorded securely. Never upload it.
-Existing installations keep their current hashed credential files and logins.
+New installations of **Veto OTT** generate unique passwords, recorded locally in
+`Veto OTT/data/first_run_credentials.json`. Store them privately, then remove that
+plaintext recovery file. It is excluded from Git. Existing logins do not change.
+The historical versions are retained as source archives, not recommended hosts.
 
-## First GitHub Push
+## Future Updates
 
-Before committing, remove any built-in passwords or tokens from source and review
-the exact staged files. Local credential files must remain excluded. A private
-GitHub repository is appropriate until the code and bundled assets have been
-reviewed for public distribution.
+Refresh the sanitized legacy exports after editing their original collections:
 
-Create an empty repository on GitHub without a README, license or .gitignore.
-Then run the following in PowerShell, substituting your author identity and URL:
+```powershell
+python ".\Veto OTT\export_projects.py"
+```
+
+Review and push changes from `D:\`:
 
 ```powershell
 Set-Location D:\
 $git = 'C:\Program Files\Git\cmd\git.exe'
-& $git config user.name 'YOUR NAME'
-& $git config user.email 'YOUR GITHUB EMAIL OR NOREPLY ADDRESS'
 & $git status --short
-& $git add -- .gitignore .gitattributes README.md 'Veto OTT'
+& $git add -- .
 & $git diff --cached --stat
 & $git diff --cached
-& $git commit -m 'Initial Veto OTT source'
-& $git remote add origin 'https://github.com/YOUR-ACCOUNT/YOUR-REPOSITORY.git'
-& $git push -u origin main
+& $git commit -m 'Describe the update'
+& $git push
 ```
 
-Complete GitHub authentication through Git's sign-in flow. Never put a password
-or access token in the remote URL, source files or command history.
+Do not restart or replace running application code while SDI output is active.
 
-Reference: [GitHub: adding locally hosted code](https://docs.github.com/en/migrations/importing-source-code/using-the-command-line-to-import-source-code/adding-locally-hosted-code-to-github).
+[GitHub push guide](https://docs.github.com/en/migrations/importing-source-code/using-the-command-line-to-import-source-code/adding-locally-hosted-code-to-github).
