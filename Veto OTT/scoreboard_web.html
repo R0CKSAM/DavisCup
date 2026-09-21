@@ -251,20 +251,33 @@ let cleanDrafts={},savedDraftIds={},savedDraftRevisions={};
 function persistWorkspace(){
  localStorage.setItem(workspaceKey('vetoScoreboardWeb'),JSON.stringify({template,configs,cleanDrafts,savedDraftIds,savedDraftRevisions,selectedSaved}));
 }
+function competitionDefaults(){return boot.competition_defaults?.[competition]||boot.defaults}
+function applyCompetitionTheme(key,value){
+ const defaults=competitionDefaults()[key],cfg={...defaults,...clone(value||{})};
+ if(competition!=='billie-jean-king-cup'||(value?.competition_theme===competition&&value?.theme_revision===1))return cfg;
+ for(const [field,next] of Object.entries(defaults))if(!['rows','text_styles','header_text','title','subtitle','banner_text'].includes(field)&&(JSON.stringify(next)!==JSON.stringify(boot.defaults[key][field])||field==='background_path'||(key==='t1'&&field==='photo_path')))cfg[field]=clone(next);
+ for(const field of ['header_text','title','subtitle','banner_text'])if(typeof cfg[field]==='string')cfg[field]=cfg[field].replaceAll('DAVIS CUP','BILLIE JEAN KING CUP').replaceAll('Davis Cup','Billie Jean King Cup');
+ for(const row of cfg.rows||[])if(typeof row.label==='string')row.label=row.label.replaceAll('Davis Cup','BJK Cup');
+ cfg.text_styles=clone(cfg.text_styles||{});
+ for(const style of Object.values(cfg.text_styles)){const c=style.color;if(Array.isArray(c)&&c[1]>c[0]*1.2&&c[1]>c[2]*1.2)style.color=Math.max(...c)<180?[3,30,77]:[210,255,36]}
+ if(key==='t12')for(const role of ['title','subtitle'])cfg.text_styles[role]={...(cfg.text_styles[role]||{}),box_enabled:true,box_color:[3,30,77],box_opacity_pct:95,box_padding_pct:15};
+ return cfg;
+}
 function loadWorkspace(){
  let saved=null;
  try{
   saved=JSON.parse(localStorage.getItem(workspaceKey('vetoScoreboardWeb'))||'null');
  }catch{}
- configs=clone(boot.defaults);
+ configs=clone(competitionDefaults());
  const oldVs=saved?.configs?.t19;
  if(oldVs&&!('versus_outline_color' in oldVs)&&JSON.stringify(oldVs.versus_panel_color)==='[246,247,243]'&&JSON.stringify(oldVs.versus_text_color)==='[0,57,36]'){
   oldVs.versus_panel_color=[0,57,36];oldVs.versus_text_color=[211,181,92];
  }
- for(const key of Object.keys(configs))configs[key]={...configs[key],...(saved?.configs?.[key]||{})};
+ for(const key of Object.keys(configs))configs[key]=applyCompetitionTheme(key,saved?.configs?.[key]||{});
  template=saved?.template in configs?saved.template:'t1';
  for(const cfg of Object.values(configs))if(!Object.values(boot.canvas_sizes).flat().includes(cfg.canvas_size))cfg.canvas_size='HD  (1920x1080)';
  cleanDrafts=clone(saved?.cleanDrafts||configs);savedDraftIds=clone(saved?.savedDraftIds||{});savedDraftRevisions=clone(saved?.savedDraftRevisions||{});selectedSaved=saved?.selectedSaved||'';
+ for(const key of Object.keys(cleanDrafts))if(configs[key])cleanDrafts[key]=applyCompetitionTheme(key,cleanDrafts[key]);
  history=[clone(configs)];historyIndex=0;selectedQueue=-1;loadQueueStorage();persistWorkspace();
 }
 async function switchCompetition(next){
@@ -321,15 +334,15 @@ for(const id of ['templatePicker','countryPicker','playerPicker']){
 }
 document.addEventListener('pointerdown',event=>{for(const id of ['templatePicker','countryPicker','playerPicker'])if(!$(id).contains(event.target))$(id).open=false});
 function markDraftClean(){cleanDrafts[template]=clone(getConfig());savedDraftIds[template]=selectedSaved;const item=library.find(p=>p.id===selectedSaved);if(item&&JSON.stringify(item.config)===JSON.stringify(getConfig()))savedDraftRevisions[template]=item.edit_revision}
-function hasUnsavedChanges(){return JSON.stringify(getConfig())!==JSON.stringify(cleanDrafts[template]||boot.defaults[template])}
+function hasUnsavedChanges(){return JSON.stringify(getConfig())!==JSON.stringify(cleanDrafts[template]||competitionDefaults()[template])}
 function loadSaved(item){if(!item||presetSaving)return;if(!confirmDiscard()){renderPresetMenu();return}template=item.template;$('template').value=template;configs[template]=clone(item.config);selectedSaved=item.id;markDraftClean();history=[];historyIndex=-1;commit();buildEditor();renderTemplateOptions();renderPresetMenu();scheduleRender()}
-function confirmDiscard(){if(presetSaving||uploadBusy)return false;if(!hasUnsavedChanges())return true;if(!confirm('Discard unsaved preview changes? Your saved templates and On Air output will not change.'))return false;configs[template]=clone(cleanDrafts[template]||boot.defaults[template]);return true}
+function confirmDiscard(){if(presetSaving||uploadBusy)return false;if(!hasUnsavedChanges())return true;if(!confirm('Discard unsaved preview changes? Your saved templates and On Air output will not change.'))return false;configs[template]=clone(cleanDrafts[template]||competitionDefaults()[template]);return true}
 function switchTemplate(key){if(presetSaving)return;if(key===template){$('templatePicker').open=false;return}if(!confirmDiscard()){$('template').value=template;return}template=key;$('template').value=key;selectedSaved=savedDraftIds[key]||'';clearPresetFilters();history=[];historyIndex=-1;commit();buildEditor();renderPresetMenu();renderTemplateOptions();$('templatePicker').open=false;scheduleRender()}
 function renderTemplateOptions(){if(!boot)return;const q=$('templateSearch').value.toLowerCase();$('templateLabel').textContent=boot.template_names[template];const box=$('templateOptions');box.replaceChildren();for(const [key,name] of Object.entries(boot.template_names)){if(!name.toLowerCase().includes(q))continue;const button=document.createElement('button');button.textContent=name;button.setAttribute('aria-pressed',String(key===template));button.onclick=()=>switchTemplate(key);box.append(button)}}
 $('templateSearch').oninput=renderTemplateOptions;
 $('presetCountry').onchange=()=>renderPresetMenu();
 $('presetPlayer').onchange=()=>loadSaved(library.find(p=>p.id===$('presetPlayer').value));
-$('newPlayer').onclick=()=>{if(!confirmDiscard())return;selectedSaved='';configs[template]=clone(boot.defaults[template]);markDraftClean();history=[];historyIndex=-1;commit();buildEditor();renderPresetMenu();scheduleRender()};
+$('newPlayer').onclick=()=>{if(!confirmDiscard())return;selectedSaved='';configs[template]=clone(competitionDefaults()[template]);markDraftClean();history=[];historyIndex=-1;commit();buildEditor();renderPresetMenu();scheduleRender()};
 $('savePreset').onclick=()=>{const cfg=getConfig(),item=library.find(p=>p.id===selectedSaved),custom=['t8','t13'].includes(template);document.querySelector('label[for=presetPlayerName]').textContent=custom?'Preset name':'Player name';$('presetCountryName').parentElement.hidden=custom;$('presetPlayerName').value=custom?(item?.player||cfg.media_name||''):(cfg.player_name||[cfg.first_name,cfg.last_name].filter(Boolean).join(' ')||item?.player||'');$('presetCountryName').value=custom?'':(cfg.country||cfg.country_a||item?.country||'');$('presetError').textContent='';$('viewDuplicate').hidden=true;$('presetDialog').showModal();$('presetPlayerName').focus()};
 $('confirmPreset').onclick=async()=>{if(presetSaving)return;presetSaving=true;syncProjectLock();try{const result=await apiJson('/api/templates/save',{template,config:clone(getConfig()),player:$('presetPlayerName').value,country:$('presetCountryName').value});if(!result.saved){duplicateItem=result.existing;$('presetError').textContent='This player and country already exist for this template. Open the saved version or save with a different name.';$('viewDuplicate').hidden=false;return}library=library.filter(p=>p.id!==result.item.id);library.push(result.item);configs[template]=clone(result.item.config);selectedSaved=result.item.id;markDraftClean();history=[];historyIndex=-1;commit();buildEditor();await refreshLibrary();renderPresetMenu();$('presetDialog').close();scheduleRender()}catch(error){$('presetError').textContent=error.message}finally{presetSaving=false;syncProjectLock()}};
 $('presetDialog').addEventListener('cancel',event=>{if(presetSaving)event.preventDefault()});
@@ -366,9 +379,10 @@ const rowLabels={label:'Stat',value:'Value',value_a:'P1',value_b:'P2',max:'Scale
 const imageMoveChoices={t1:[['photo_path','Background'],['player_path','Player cutout'],['logo_path','Logo']],t2:[['photo_a','Player 1'],['photo_b','Player 2'],['logo_path','Logo']],t3:[['photo_a','Left player'],['photo_b','Right player'],['logo_path','Logo']],t4:[['player_0','Player 1'],['player_1','Player 2'],['player_2','Player 3'],['logo_path','Logo']],t5:[['band','Whole band'],['player_path','Player cutout'],['player_name','Player name'],['background_path','Background']]};
 const selectedLayer={t1:'photo_path',t2:'photo_a',t3:'photo_a',t4:'player_0',t5:'band'};
 Object.assign(labels,{player_name:'Player name',country:'Country',total_wl:'Total W/L',debut_year:'Debut year',favourite_hand:'Favourite hand'});
-mainFields.t6=['canvas_size','player_name','country','age','total_wl','debut_year','favourite_hand','player_offset_x_pct','player_offset_y_pct','player_size_pct'];
-Object.assign(labels,{atp_ranking:'ATP ranking',season_year:'Season year',season_wl:'Season W/L',career_high:'Career-high ranking',stats_as_of:'Stats verified on',subtitle:'Match caption',date_text:'Match dates',venue:'Venue',band_size_pct:'Band size %'});
-function buildStoredStats(){return '<details class="editor-detail"><summary>Head2Head player statistics</summary>'+group('Stored statistics',`<div class="grid">${['atp_ranking','season_year','season_wl','career_high','stats_as_of'].map(k=>scalarField(k,getConfig()[k]||'')).join('')}</div>`)+'</details>'}
+mainFields.t6=['canvas_size','player_name','country','age','atp_ranking','total_wl','debut_year','favourite_hand','player_offset_x_pct','player_offset_y_pct','player_size_pct'];
+labels.stats_background='Player Stats background';
+Object.assign(labels,{atp_ranking:'Ranking',season_year:'Season year',season_wl:'Season W/L',career_high:'Career-high ranking',stats_as_of:'Stats verified on',subtitle:'Match caption',date_text:'Match dates',venue:'Venue',band_size_pct:'Band size %'});
+function buildStoredStats(){return '<details class="editor-detail"><summary>Head2Head player statistics</summary>'+group('Stored statistics',`<div class="grid">${['season_year','season_wl','career_high','stats_as_of'].map(k=>scalarField(k,getConfig()[k]||'')).join('')}</div>`)+'</details>'}
 assetFields.t6=[['player_path','Player image']];colorFields.t6=[];imageMoveChoices.t6=[['player_path','Player image']];selectedLayer.t6='player_path';
 mainFields.t7=['canvas_size','country_a','country_b','score'];assetFields.t7=[];colorFields.t7=[];imageMoveChoices.t7=[];selectedLayer.t7='';
 mainFields.t8=['canvas_size','loop'];assetFields.t8=[];colorFields.t8=[];imageMoveChoices.t8=[];selectedLayer.t8='';labels.loop='Loop video';
@@ -389,9 +403,10 @@ mainFields.t13=['canvas_size','headline','subject','headline_font_size','subject
 assetFields.t13=[['image_path','News image'],['logo_path','Logo'],['background_path','Background']];
 colorFields.t13=[['headline_box_color','Headline box'],['subject_box_color','Subject box'],['accent_color','Frame trim']];
 imageMoveChoices.t13=[['image_path','News image']];selectedLayer.t13='image_path';
-mainFields.t14=['canvas_size','first_name','last_name','country','age','singles_wl','total_wl','ties_played','first_year_played','favourite_hand','band_x_pct','band_y_pct','band_scale_pct','player_size_pct','player_offset_x_pct','player_offset_y_pct','transparent_background','overlay_opacity_pct'];
+mainFields.t14=['canvas_size','first_name','last_name','country','age','singles_wl','total_wl','ties_played','first_year_played','favourite_hand','band_x_pct','band_y_pct','band_scale_pct','player_size_pct','player_offset_x_pct','player_offset_y_pct','player_outline_px','transparent_background','overlay_opacity_pct'];
+labels.player_outline_px='Player outline px (0 = off)';
 assetFields.t14=[['player_path','Player cutout']];
-colorFields.t14=[['band_green','Identity panel'],['band_green_dark','Dark accents'],['accent_green','Bright accents'],['panel_white','Stats panel'],['stats_green','Stat values'],['label_color','Stat labels'],['separator_color','Separators'],['name_text_color','Player name'],['country_text_color','Country']];
+colorFields.t14=[['band_green','Identity panel'],['band_green_dark','Dark accents'],['accent_green','Bright accents'],['panel_white','Stats panel'],['stats_green','Stat values'],['label_color','Stat labels'],['separator_color','Separators'],['name_text_color','Player name'],['country_text_color','Country'],['player_outline_color','Player outline']];
 imageMoveChoices.t14=[['band','Whole band'],['player_path','Player cutout']];selectedLayer.t14='band';
 mainFields.t15=['canvas_size','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
 assetFields.t15=[['band_path','Band image']];colorFields.t15=[];
@@ -415,6 +430,11 @@ colorFields.t19=[['title_box_color','Title panel'],['title_text_color','Title te
 imageMoveChoices.t19=[['band','Whole band'],['photo_a','Left player image'],['photo_b','Right player image']];selectedLayer.t19='band';rowFields.t19=[];
 colorFields.t19.unshift(['background_color','Background colour']);
 colorFields.t19.push(['versus_outline_color','Centre border']);
+mainFields.t20=['canvas_size','title','date_text','country_a','country_a_label','country_b','country_b_label','score_a','score_b','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
+assetFields.t20=[];rowFields.t20=[];
+colorFields.t20=[['title_color','Title'],['date_color','Date'],['country_color','Country names'],['score_a_color','Left score'],['score_b_color','Right score'],['divider_color','Dividers']];
+imageMoveChoices.t20=[['band','Whole band']];selectedLayer.t20='band';
+Object.assign(labels,{country_a_label:'Left display name',country_b_label:'Right display name',score_a:'Left score',score_b:'Right score'});
 labels.show_logo='Show logo';
 Object.assign(labels,{auto_text_height:'Automatic text box heights',headline_height_pct:'Manual headline height (%)',subject_height_pct:'Manual subject height (%)',auto_image_frame:'Fit frame to photo'});
 Object.assign(labels,{headline:'Headline',subject:'Subject',headline_font_size:'Headline size (px)',subject_font_size:'Subject size (px)',headline_align:'Headline alignment',subject_align:'Subject alignment',box_opacity_pct:'Box opacity (%)'});
@@ -451,7 +471,7 @@ function queueDisplayName(){
 }
 function loadQueueStorage(){
  queueItems=[null,null,null,null];queueUrls=['','','',''];queueRenderTokens=[0,0,0,0];
- try{const value=JSON.parse(localStorage.getItem(workspaceKey(QUEUE_STORAGE_KEY))||'[]');if(Array.isArray(value)){const count=Math.max(1,Math.min(12,value.length||4));queueItems=Array.from({length:count},(_,i)=>{const item=value[i];return item&&boot.defaults[item.template]&&item.config&&typeof item.config==='object'?item:null});queueUrls=Array(count).fill('');queueRenderTokens=Array(count).fill(0)}}catch{}
+ try{const value=JSON.parse(localStorage.getItem(workspaceKey(QUEUE_STORAGE_KEY))||'[]');if(Array.isArray(value)){const count=Math.max(1,Math.min(12,value.length||4));queueItems=Array.from({length:count},(_,i)=>{const item=value[i];return item&&boot.defaults[item.template]&&item.config&&typeof item.config==='object'?{...item,config:applyCompetitionTheme(item.template,item.config)}:null});queueUrls=Array(count).fill('');queueRenderTokens=Array(count).fill(0)}}catch{}
 }
 function saveQueue(){localStorage.setItem(workspaceKey(QUEUE_STORAGE_KEY),JSON.stringify(queueItems))}
 function updateQueueControls(){
@@ -460,7 +480,7 @@ function updateQueueControls(){
 }
 async function renderQueueThumbnail(index,item){
  const token=++queueRenderTokens[index],loading=$('queueLoading'+index),image=$('queueImage'+index);
- try{const r=await fetch('/api/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:clientId,template:item.template,config:item.config,update_live:false})});if(!r.ok)throw Error('Preview unavailable');const blob=await r.blob();if(token!==queueRenderTokens[index]||queueItems[index]!==item)return;const url=URL.createObjectURL(blob),old=queueUrls[index];queueUrls[index]=url;image.src=url;image.hidden=false;loading.hidden=true;if(old)URL.revokeObjectURL(old)}catch{if(token===queueRenderTokens[index]&&loading)loading.textContent='Preview unavailable'}
+ try{const r=await fetch('/api/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:clientId,competition,template:item.template,config:item.config,update_live:false})});if(!r.ok)throw Error('Preview unavailable');const blob=await r.blob();if(token!==queueRenderTokens[index]||queueItems[index]!==item)return;const url=URL.createObjectURL(blob),old=queueUrls[index];queueUrls[index]=url;image.src=url;image.hidden=false;loading.hidden=true;if(old)URL.revokeObjectURL(old)}catch{if(token===queueRenderTokens[index]&&loading)loading.textContent='Preview unavailable'}
 }
 function renderQueue(){
  $('queueSlots').style.setProperty('--queue-count',queueItems.length);
@@ -495,11 +515,12 @@ function setError(message=''){const box=$('error');box.textContent=message;box.s
 function markChanged(rebuild=false){commit();if(rebuild)buildEditor();scheduleRender()}
 
 function scalarField(key,value,setter){
+ if(key==='stats_background'&&competition!=='billie-jean-king-cup')return '';
  const label=labels[key]||key.replaceAll('_',' ');let control='';
  if(typeof value==='boolean')return `<div class="field check"><input type="checkbox" data-scalar="${key}" ${value?'checked':''}><label>${esc(label)}</label></div>`;
- let choices=null;if(key==='canvas_size')choices=boot.canvas_sizes[template];else if(key==='background_mode')choices=['Transparent','Solid colour','Image'];else if(key==='panel_side')choices=['right','left'];else if(key==='panel_style')choices=['solid','gradient','glass'];else if(key.endsWith('_align'))choices=['left','center','right'];
+ let choices=null;if(key==='canvas_size')choices=boot.canvas_sizes[template];else if(key==='stats_background')choices=['Original artwork','Competition theme'];else if(key==='background_mode')choices=['Transparent','Solid colour','Image'];else if(key==='panel_side')choices=['right','left'];else if(key==='panel_style')choices=['solid','gradient','glass'];else if(key.endsWith('_align'))choices=['left','center','right'];
  if(choices)control=`<select data-scalar="${key}">${choices.map(x=>option(x,x,value)).join('')}</select>`;
- else if(['title','headline','subject','text_a','text_b','text'].includes(key))control=`<textarea data-scalar="${key}">${esc(value)}</textarea>`;
+ else if(['title','headline','subject','text_a','text_b','text'].includes(key)||(template==='t14'&&key==='favourite_hand'))control=`<textarea data-scalar="${key}">${esc(value)}</textarea>`;
  else if(key==='overlay_opacity_pct')control=`<input data-scalar="${key}" type="number" min="0" max="100" step="1" value="${esc(value??100)}">`;
  else if(typeof value==='number')control=`<input data-scalar="${key}" type="number" step="0.5" value="${esc(value)}">`;
  else control=`<input data-scalar="${key}" type="text" ${template==='t7'&&key.startsWith('country_')?'list="qualifierCountries"':''} value="${esc(value)}">`;
@@ -518,17 +539,17 @@ function buildImageAdjustments(){const cfg=getConfig();return group('Image adjus
 function rowsTable(rows,fields,path){let head=fields.map(f=>`<th>${esc(rowLabels[f]||f)}</th>`).join('');let body=rows.map((row,i)=>`<tr>${fields.map(f=>`<td><input data-row-path="${path}" data-row-index="${i}" data-row-field="${f}" value="${esc(row[f]??'')}"></td>`).join('')}<td style="width:35px"><button class="icon-button" data-remove-row="${path}" data-row-index="${i}" title="Remove">×</button></td></tr>`).join('');return `<table class="row-table"><thead><tr>${head}<th style="width:35px"></th></tr></thead><tbody>${body}</tbody></table><div class="button-row"><button data-add-row="${path}">Add stat</button></div>`}
 function buildRows(){const cfg=getConfig();if(['t4','t5','t14','t15','t16','t17','t18'].includes(template))return '';return group('Stat rows',rowsTable(cfg.rows||[],rowFields[template],'rows'))}
 function buildPlayers(){if(template!=='t4')return '';const cfg=getConfig();return group('Players',cfg.players.map((p,i)=>`<div class="player"><h3>Player ${i+1}</h3><div class="grid">${['team','first','last','result','photo_zoom','photo_focus_x','photo_focus_y'].map(k=>`<div class="field"><label>${labels[k]}</label><input data-player="${i}" data-player-field="${k}" type="${typeof p[k]==='number'?'number':'text'}" value="${esc(p[k]??'')}"></div>`).join('')}</div>${rowsTable(p.stats||[],rowFields.t4,`players.${i}.stats`)}</div>`).join(''))}
-function buildEditor(){const base=template==='t18'?buildScoreboardAstern():template==='t15'?buildMain()+buildAssets():template==='t13'?buildMain()+buildAssets()+buildColors()+buildTextStyles():['t10','t11','t12','t19'].includes(template)?buildMatchTemplate():template==='t9'?buildPlayerLibrary()+buildHead2Head()+buildTextStyles():template==='t8'?buildMedia()+buildMain()+(boot.custom_text_boxes?buildCustomBoxes():''):template==='t7'?buildMain()+buildQualifierRows()+buildTextStyles():template==='t6'?buildMain()+group('Player image',uploadField('player_path','Player image',getConfig().player_path))+buildStoredStats()+buildTextStyles():buildMain()+buildRows()+buildPlayers()+'<details class="editor-detail"><summary>Images and positioning</summary>'+buildAssets()+'</details><details class="editor-detail"><summary>Colors and typography</summary>'+buildColors()+buildTextStyles()+'</details>';const content=base+(template==='t18'?'':buildImageAdjustments());$('editor').innerHTML='<fieldset class="editor-fields" id="editorFields">'+content+'</fieldset>';bindEditor();bindPlayerLibrary();bindCustomBoxes();bindAstern();syncTextBoxes();syncImageTools();syncProjectLock()}
+function buildEditor(){const base=template==='t18'?buildScoreboardAstern():template==='t15'?buildMain()+buildAssets():template==='t13'?buildMain()+buildAssets()+buildColors()+buildTextStyles():['t10','t11','t12','t19','t20'].includes(template)?buildMatchTemplate():template==='t9'?buildPlayerLibrary()+buildHead2Head()+buildTextStyles():template==='t8'?buildMedia()+buildMain()+(boot.custom_text_boxes?buildCustomBoxes():''):template==='t7'?buildMain()+buildQualifierRows()+buildTextStyles():template==='t6'?buildMain()+group('Player image',uploadField('player_path','Player image',getConfig().player_path))+buildStoredStats()+buildTextStyles():buildMain()+buildRows()+buildPlayers()+'<details class="editor-detail"><summary>Images and positioning</summary>'+buildAssets()+'</details><details class="editor-detail"><summary>Colors and typography</summary>'+buildColors()+buildTextStyles()+'</details>';const content=base+(template==='t18'?'':buildImageAdjustments());$('editor').innerHTML='<fieldset class="editor-fields" id="editorFields">'+content+'</fieldset>';bindEditor();bindPlayerLibrary();bindCustomBoxes();bindAstern();syncTextBoxes();syncImageTools();syncProjectLock()}
 
 function bindAstern(){if(template!=='t18')return;document.querySelectorAll('[data-country-name]').forEach(input=>{const update=()=>{const key=input.dataset.countryName;getConfig()[key]=input.value;const record=flagRecord(input.value),image=document.querySelector(`[data-country-preview="${key}"]`);image.style.visibility=record?'visible':'hidden';if(record)image.src=flagUrl(record.code);scheduleRender()};input.oninput=update;input.onchange=()=>{update();commit()}});if($('asternSetCount'))$('asternSetCount').onchange=()=>{getConfig().set_count=Number($('asternSetCount').value);markChanged(true)};document.querySelectorAll('[data-score-side]').forEach(input=>{const update=()=>{const key='scores_'+input.dataset.scoreSide;getConfig()[key]=getConfig()[key]||['','','','',''];getConfig()[key][+input.dataset.scoreIndex]=input.value};input.oninput=()=>{update();scheduleRender()};input.onchange=()=>{update();commit()}})}
 
 function pathTarget(path){const cfg=getConfig();if(path==='rows')return cfg.rows;const m=path.match(/^players\.(\d+)\.stats$/);return m?cfg.players[+m[1]].stats:null}
-function setImagePath(key,value){const cfg=getConfig();const m=key.match(/^player\.(\d+)\.photo$/);if(m)cfg.players[+m[1]].photo=value;else cfg[key]=value}
+function setImagePath(key,value){const cfg=getConfig();const m=key.match(/^player\.(\d+)\.photo$/);if(m)cfg.players[+m[1]].photo=value;else cfg[key]=value;if(template==='t19'&&key==='background_path'){if(value)cfg.background_mode='Image';else if(cfg.background_mode==='Image')cfg.background_mode='Solid colour'}}
 async function uploadImageFile(file,key){
  if(!file||!file.type.startsWith('image/'))throw new Error('Drop or choose a supported image file.');
  if(uploadBusy||presetSaving)throw new Error('Wait for the current upload or save to finish.');
  uploadBusy=true;syncProjectLock();document.body.classList.add('busy');
- try{const data=await fileData(file),res=await apiJson('/api/upload',{name:file.name,data});setImagePath(key,res.path);selectedLayer[template]=key.startsWith('player.')?`player_${key.split('.')[1]}`:key;markChanged(true)}
+ try{const data=await fileData(file),res=await apiJson('/api/upload',{name:file.name,data});setImagePath(key,res.path);selectedLayer[template]=template==='t19'&&key==='background_path'?'band':key.startsWith('player.')?`player_${key.split('.')[1]}`:key;markChanged(true)}
  finally{uploadBusy=false;document.body.classList.remove('busy');syncProjectLock()}
 }
 function bindEditor(){
@@ -553,7 +574,7 @@ function bindEditor(){
 }
 function fileData(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read image'));r.readAsDataURL(file)})}
 async function apiJson(url,payload){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,competition,client_id:clientId})});let value;try{value=await r.json()}catch{value={error:`HTTP ${r.status}`}}if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);return value}
-function request(){return {client_id:clientId,template,config:getConfig(),update_live:false}}
+function request(){return {client_id:clientId,competition,template,config:getConfig(),update_live:false}}
 function scheduleRender(save=true){syncQueueSelection();const key=currentSnapshotKey();if(key===scheduledPreview){syncProjectLock();return}scheduledPreview=key;++renderToken;previewReady=false;updateQueueControls();$('stage').setAttribute('aria-busy','true');$('dimensions').textContent='Rendering...';syncProjectLock();syncMediaPreview();layoutTextBoxes();clearTimeout(renderTimer);renderTimer=setTimeout(renderNow,save?90:0)}
 async function renderNow(){
  if(previewRenderBusy){previewRenderAgain=true;return}
@@ -589,7 +610,7 @@ function moveTarget(){
  if(template==='t9'||(['t10','t19'].includes(template)&&key.startsWith('photo_')))return {obj:cfg,x:key+'_offset_x_pct',y:key+'_offset_y_pct',size:key+'_size_pct',min:10,max:template==='t9'?300:200,xMin:-100,xMax:100,yMin:-100,yMax:100,defaultX:0,defaultY:0};
  if(['t11','t19'].includes(template))return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:0,xMax:100,yMin:0,yMax:100};
  if(template==='t15')return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:-50,xMax:150,yMin:-50,yMax:150};
- if(['t16','t17','t18'].includes(template))return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:-50,xMax:150,yMin:-50,yMax:150};
+ if(['t16','t17','t18','t20'].includes(template))return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:-50,xMax:150,yMin:-50,yMax:150};
  if(['t10','t12'].includes(template))return {obj:cfg,x:'logo_x_pct',y:'logo_y_pct',size:'logo_size_pct',min:10,max:200,xMin:0,xMax:100,yMin:0,yMax:100};
  if(template==='t6')return {obj:cfg,x:'player_offset_x_pct',y:'player_offset_y_pct',size:'player_size_pct',min:10,max:300,xMin:-100,xMax:100,yMin:-100,yMax:100,defaultX:0,defaultY:0};
  if(template==='t14'){
@@ -616,7 +637,7 @@ function moveTarget(){
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function targetNumber(obj,key,fallback){const value=Number(obj[key]);return Number.isFinite(value)?value:fallback}
 function selectedUploadKey(){const key=selectedLayer[template];if(['t6','t14'].includes(template))return 'player_path';if(template==='t5')return key==='background_path'?'background_path':'player_path';return key.startsWith('player_')?`player.${key.split('_')[1]}.photo`:key}
-function selectedImagePath(){const cfg=getConfig(),key=selectedLayer[template];if(key.startsWith('text:'))return true;if(template==='t19'&&key==='band')return true;if(['t16','t17','t18'].includes(template))return true;if(template==='t6')return cfg.player_path;if(template==='t14')return key==='band'?true:cfg.player_path;if(template==='t5')return key==='background_path'?cfg.background_path:true;return key.startsWith('player_')?cfg.players[+key.split('_')[1]].photo:cfg[key]}
+function selectedImagePath(){const cfg=getConfig(),key=selectedLayer[template];if(key.startsWith('text:'))return true;if(template==='t19'&&key==='band')return true;if(['t16','t17','t18','t20'].includes(template))return true;if(template==='t6')return cfg.player_path;if(template==='t14')return key==='band'?true:cfg.player_path;if(template==='t5')return key==='background_path'?cfg.background_path:true;return key.startsWith('player_')?cfg.players[+key.split('_')[1]].photo:cfg[key]}
 function syncImageTools(){
  if(template==='t8'){document.querySelector('.preview-tools').hidden=true;return}
  document.querySelector('.preview-tools').hidden=false;
@@ -709,7 +730,7 @@ async function init(){
   setInterval(refreshLive,1500);setInterval(async()=>{try{await apiJson('/api/session/heartbeat',{});await refreshUsers()}catch{}},5000);
  }catch(e){setError(e.message)}
 }
-$('template').onchange=()=>switchTemplate($('template').value);$('undo').onclick=()=>restore(historyIndex-1);$('redo').onclick=()=>restore(historyIndex+1);$('reset').onclick=()=>{if(presetSaving||!confirm('Reset this template draft?'))return;configs[template]=clone(boot.defaults[template]);commit();buildEditor();scheduleRender()};
+$('template').onchange=()=>switchTemplate($('template').value);$('undo').onclick=()=>restore(historyIndex-1);$('redo').onclick=()=>restore(historyIndex+1);$('reset').onclick=()=>{if(presetSaving||!confirm('Reset this template draft?'))return;configs[template]=clone(competitionDefaults()[template]);commit();buildEditor();scheduleRender()};
 $('pngButton').onclick=async()=>{try{await download('/api/export/png',request(),`scoreboard_${template}.png`)}catch(e){setError(e.message)}};$('mp4Button').onclick=()=>$('mp4Dialog').showModal();$('exportMp4').onclick=async()=>{try{$('exportMp4').disabled=true;await download('/api/export/mp4',{...request(),preset:$('mp4Preset').value,duration:+$('mp4Duration').value},`scoreboard_${template}.mp4`);$('mp4Dialog').close()}catch(e){setError(e.message)}finally{$('exportMp4').disabled=false}};
 $('operatorName').onchange=async()=>{try{await registerSession();await refreshUsers();await refreshLive()}catch(e){setError(e.message)}};$('usersButton').onclick=async()=>{$('usersDialog').showModal();await refreshUsers()};$('refreshUsers').onclick=refreshUsers;
 async function liveCommand(path,payload){if(liveCommandBusy)return;liveCommandBusy=true;++liveStatusEpoch;updateLiveButtons();let succeeded=false;try{const result=await apiJson(path,payload);applyLiveStatus(result);succeeded=true;return result}finally{liveCommandBusy=false;updateLiveButtons();if(succeeded)void refreshProgram();else void refreshLive()}}

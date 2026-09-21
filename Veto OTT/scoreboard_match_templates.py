@@ -178,7 +178,7 @@ def render_news(c,image,cfg):
         source=source.resize((max(1,round(source.width*scale)),max(1,round(source.height*scale))),Image.Resampling.LANCZOS)
         left.alpha_composite(source,(round(left.width*.5-source.width*.5+W*cfg['image_offset_x_pct']/100),
                                      round(left.height*.5-source.height*.5+H*cfg['image_offset_y_pct']/100)))
-    panel(image_box,(0,65,49),left)
+    panel(image_box,(3,30,77) if c._competition_theme.active(cfg) else (0,65,49),left)
     for role,box in zip(('headline','subject'),news_layout(c,cfg,W,H)):
         x,y,w,h=box
         layer=news_text_layer(c,dict(cfg,_news_scale=H/1080,box_opacity_pct=0),role,(w-2*inset,h-2*inset))
@@ -187,8 +187,8 @@ def render_news(c,image,cfg):
     rail_cfg=dict(cfg,headline='NEWS HEADLINE',headline_align='center',headline_font_size=70,
                   box_opacity_pct=0,_news_scale=H/1080)
     text=news_text_layer(c,rail_cfg,'headline',(rail[3]-2*inset,rail[2]-2*inset)).rotate(90,expand=True)
-    panel(rail,(0,54,42),text)
-    if cfg.get('show_logo',True):
+    panel(rail,(3,30,77) if c._competition_theme.active(cfg) else (0,54,42),text)
+    if cfg.get('show_logo',True) and (not c._competition_theme.active(cfg) or cfg.get('logo_path')):
         logo=c.load_photo(cfg.get('logo_path') or str(Path(__file__).with_name('match_davis_logo.png')))
         if logo:
             logo.thumbnail((round(W*.23),round(H*.19)),Image.Resampling.LANCZOS)
@@ -255,6 +255,73 @@ def register(namespace):
                    versus_outline_color=[211,181,92],
                    transparent_background=True, overlay_opacity_pct=100),
     }
+
+    defaults['t20'] = dict(template='t20',canvas_size='HD  (1920x1080)',
+        title='QUALIFIERS',date_text='07 - 08 FEBRUARY 2026',
+        country_a='Korea',country_b='Argentina',country_a_label='KOREA, REP.',country_b_label='ARGENTINA',
+        score_a='3',score_b='2',band_x_pct=50,band_y_pct=84,band_size_pct=100,
+        overlay_opacity_pct=100,transparent_background=True,text_styles={},
+        background_color=[0,0,0],accent_color=[50,237,189],rows=[],
+        title_color=[255,255,255],date_color=[255,255,255],country_color=[3,30,77],
+        score_a_color=[50,237,189],score_b_color=[255,255,255],divider_color=[50,237,189])
+
+    def render_qualifier_band(cfg):
+        W,H = c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
+        image = Image.new('RGBA',(W,H))
+        with Image.open(root/'qualifier_band.png') as source:
+            art = source.convert('RGBA').resize((1672,941),Image.Resampling.LANCZOS).crop((85,685,1587,903))
+        art = c.adjust_source_image(art,cfg)
+        draw = ImageDraw.Draw(art)
+
+        def text(role,value,x,y,width,height,size,color):
+            value = c.apply_text_case(cfg,role,str(value))
+            color,size = c.styled_text(cfg,role,tuple(cfg[color]),size)
+            factory = c.text_font_factory(cfg,role,'bold',value)
+            lines = c.country_text_lines(draw,value,factory(size),width) if role.startswith('country_') else [value]
+            while size > 1:
+                font = factory(size)
+                if max(c.text_bbox(draw,line,font)[0] for line in lines)<=width and len(lines)*size*1.15<=height:
+                    break
+                size -= 1
+            for index,line in enumerate(lines):
+                c.draw_text_centered(draw,line,factory(size),x,round(y+(index-(len(lines)-1)/2)*size*1.15),color)
+
+        def flag(country,x):
+            code = c.qualifier_country_code(country)
+            if not code:
+                return
+            try:
+                with zipfile.ZipFile(root/'country_flags.zip') as archive:
+                    source = Image.open(io.BytesIO(archive.read(code+'.png'))).convert('RGBA')
+            except (KeyError,OSError,zipfile.BadZipFile):
+                return
+            size=126
+            ratio=max(size/source.width,size/source.height)
+            source=source.resize((round(source.width*ratio),round(source.height*ratio)),Image.Resampling.LANCZOS)
+            left=(source.width-size)//2;top=(source.height-size)//2
+            source=source.crop((left,top,left+size,top+size))
+            mask=Image.new('L',(size,size));ImageDraw.Draw(mask).ellipse((0,0,size-1,size-1),fill=255)
+            source.putalpha(mask)
+            art.alpha_composite(source,(x-size//2,135-size//2))
+
+        flag(cfg['country_a'],126);flag(cfg['country_b'],1374)
+        text('title',cfg['title'],590,29,235,42,34,'title_color')
+        text('date_text',cfg['date_text'],877,29,280,36,22,'date_color')
+        text('country_a',cfg['country_a_label'] or cfg['country_a'].upper(),387,140,270,120,55,'country_color')
+        text('country_b',cfg['country_b_label'] or cfg['country_b'].upper(),1110,140,270,120,55,'country_color')
+        text('score_a',cfg['score_a'],656,140,155,150,140,'score_a_color')
+        text('score_b',cfg['score_b'],838,140,155,150,140,'score_b_color')
+        draw.line((725,10,725,45),fill=tuple(cfg['divider_color']),width=2)
+        draw.line((751,102,751,180),fill=tuple(cfg['divider_color']),width=3)
+        scale=W*.90/art.width*c.clamp_number(cfg.get('band_size_pct'),10,200,100)/100
+        art=art.resize((max(1,round(art.width*scale)),max(1,round(art.height*scale))),Image.Resampling.LANCZOS)
+        opacity=c.clamp_number(cfg.get('overlay_opacity_pct'),0,100,100)/100
+        if opacity<1:
+            art.putalpha(art.getchannel('A').point(lambda v:round(v*opacity)))
+        x=W*c.clamp_number(cfg.get('band_x_pct'),-50,150,50)/100
+        y=H*c.clamp_number(cfg.get('band_y_pct'),-50,150,84)/100
+        image.alpha_composite(art,(round(x-art.width/2),round(y-art.height/2)))
+        return image
 
     def render_custom_band(cfg):
         W,H = c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
@@ -393,6 +460,8 @@ def register(namespace):
 
     def render(cfg):
         key = cfg['template']
+        if key == 't20':
+            return render_qualifier_band(cfg)
         if key == 't15':
             return render_custom_band(cfg)
         if key in ('t16','t17'):
@@ -400,12 +469,15 @@ def register(namespace):
         if key == 't18':
             return render_scoreboard_astern(cfg)
         W,H = c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
+        billie = c._competition_theme.active(cfg)
         transparent = key in ('t11','t19') and bool(cfg.get('transparent_background', True))
         if key == 't19':
             transparent = cfg.get('background_mode','Transparent') == 'Transparent'
         image = Image.new('RGBA' if transparent else 'RGB', (W,H),
                           (0,0,0,0) if transparent else tuple(cfg['background_color']))
         path = cfg.get('background_path') or (root/'match_stadium.png' if key not in ('t11','t19') else '')
+        if billie and not cfg.get('background_path') and (key not in ('t11','t19') or cfg.get('background_mode') == 'Image'):
+            path = root/'billie_background.png'
         if key == 't19' and cfg.get('background_mode','Transparent') != 'Image':
             path = ''
         background = c.load_photo(str(path)) if path else None
@@ -414,11 +486,11 @@ def register(namespace):
             image.paste(fitted,(0,0),fitted.getchannel('A') if key == 't19' and fitted.mode == 'RGBA' else None)
         if key=='t13':
             return render_news(c,image,cfg)
-        if key == 't12':
+        if key == 't12' and not billie:
             image = image.filter(ImageFilter.GaussianBlur(W/640))
             image = Image.blend(image,Image.new('RGB',image.size,'black'),.28)
         draw = ImageDraw.Draw(image)
-        green=(0,57,36); white=(255,255,255); gold=(211,181,92)
+        green=(3,30,77) if billie else (0,57,36); white=(255,255,255); gold=(210,255,36) if billie else (211,181,92)
         accent=tuple(cfg['accent_color'])
 
         def text(value,cx,cy,width,height,size,color=white,italic=False,role='all'):
@@ -448,7 +520,7 @@ def register(namespace):
             ImageDraw.Draw(mask).rounded_rectangle((0,0,size[0]-1,size[1]-1),round(W*radius),fill=255)
             image.paste(source,(round(W*x),round(H*y)),mask)
 
-        if key not in ('t11','t19'):
+        if key not in ('t11','t19') and (not billie or cfg.get('logo_path')):
             logo=c.load_photo(cfg.get('logo_path') or str(root/'match_davis_logo.png'))
             if logo:
                 logo_width=max(1,round(W*cfg['logo_size_pct']/100))
@@ -564,5 +636,6 @@ def register(namespace):
     namespace['TEXT_STYLE_TARGETS']['t19']=[('all','All text'),('title','Coming Next title'),
         ('player_a','Left player name'),('player_b','Right player name'),('versus','VS'),
         ('country_a','Left country'),('country_b','Right country')]
+    namespace['TEXT_STYLE_TARGETS']['t20']=[('all','All text'),('title','Title'),('date_text','Date'),('country_a','Left country'),('country_b','Right country'),('score_a','Left score'),('score_b','Right score')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2']
+    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band']

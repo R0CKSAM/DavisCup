@@ -25,6 +25,7 @@ Optional direct Blackmagic DeckLink output:
 from __future__ import annotations
 import argparse, colorsys, copy, csv, json, os, re, shutil, subprocess, sys, tempfile, threading, time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -1407,6 +1408,12 @@ T5_SIZES = BROADCAST_SIZES.copy()
 # Full-bleed photo, solid black panel right, title, stacked rows
 # ═══════════════════════════════════════════════════════════════════════════
 
+def competition_background(cfg, size, fallback):
+    if _competition_theme.active(cfg):
+        return _competition_theme.background(size)
+    return Image.new('RGB',size,fallback)
+
+
 def render_t1(cfg: Dict) -> Image.Image:
     W, H = T1_SIZES.get(cfg.get('canvas_size'), (1920,1080))
     render_scale = max(1, int(cfg.get("_render_scale", 1)))
@@ -1416,7 +1423,7 @@ def render_t1(cfg: Dict) -> Image.Image:
     background=normalize_rgb(cfg.get("background_color"),THEME["bg"])
     side  = cfg.get("panel_side","right")
 
-    img = Image.new("RGB",(W,H),background)
+    img = competition_background(cfg,(W,H),background)
     photo = load_photo(cfg.get("photo_path",""))
     if photo:
         img.paste(cover_crop(
@@ -1637,7 +1644,7 @@ def render_t2(cfg: Dict) -> Image.Image:
     photo_brightness_pct = clamp_number(cfg.get("photo_brightness_pct"), 50, 120, 92)
     photo_w = int(half * photo_width_pct / 100.0)
 
-    img = Image.new("RGB",(W,H),background)
+    img = competition_background(cfg,(W,H),background)
 
     def paste_photo(path, x, prefix, flip=False):
         p = load_photo(path)
@@ -1830,7 +1837,7 @@ def render_t3(cfg: Dict) -> Image.Image:
     bar_color = normalize_rgb(cfg.get("bar_color"), acc)
     background=normalize_rgb(cfg.get("background_color"),THEME["bg"])
 
-    img=Image.new("RGB",(W,H),background)
+    img=competition_background(cfg,(W,H),background)
     draw_bg = ImageDraw.Draw(img)
 
     # Photo zone top ~52% of canvas
@@ -1840,7 +1847,8 @@ def render_t3(cfg: Dict) -> Image.Image:
     def paste_half_photo(path, x, w, prefix, flip_inner=False):
         p = load_photo(path)
         if p is None:
-            img.paste(Image.new("RGB",(w,photo_h),background),(x,0))
+            if not _competition_theme.active(cfg):
+                img.paste(Image.new("RGB",(w,photo_h),background),(x,0))
             return
         p = cover_crop(
             p, w, photo_h, cfg.get(f"{prefix}_zoom", 100),
@@ -2068,7 +2076,7 @@ def render_t4(cfg: Dict) -> Image.Image:
     bar_color = normalize_rgb(cfg.get("bar_color"), acc)
     background=normalize_rgb(cfg.get("background_color"),THEME["bg"])
 
-    img=Image.new("RGB",(W,H),background)
+    img=competition_background(cfg,(W,H),background)
     draw = ImageDraw.Draw(img)
 
     # Banner
@@ -3351,6 +3359,7 @@ TEMPLATE_KEYS = ("t1", "t2", "t3", "t4")
 T6_SIZES = BROADCAST_SIZES.copy()
 DEF_T6 = {
     "template": "t6", "canvas_size": "HD  (1920x1080)",
+    "stats_theme": "davis-cup", "stats_background": "Original artwork",
     "player_name": "", "country": "", "age": "", "total_wl": "",
     "debut_year": "", "favourite_hand": "", "player_path": "",
     "player_offset_x_pct": 0, "player_offset_y_pct": 0, "player_size_pct": 100,
@@ -3361,12 +3370,24 @@ TEXT_STYLE_TARGETS['t6'] = [('all', 'All text')]
 DEF_T6.update(atp_ranking='',season_year='2026',season_wl='',career_high='',stats_as_of='')
 
 
+def country_text_lines(draw, value, font, max_width):
+    words = str(value).split()
+    text = ' '.join(words)
+    if len(words) < 2 or text_bbox(draw,text,font)[0] <= max_width:
+        return [text]
+    split = min(range(1,len(words)),key=lambda n:max(
+        text_bbox(draw,' '.join(words[:n]),font)[0],text_bbox(draw,' '.join(words[n:]),font)[0]))
+    return [' '.join(words[:split]),' '.join(words[split:])]
+
+
 def render_t6(cfg: Dict) -> Image.Image:
     """Fixed Players Stats artwork with fitted operator-entered values."""
     scale = max(1, int(cfg.get('_render_scale', 1)))
     W, H = T6_SIZES.get(cfg.get('canvas_size'), (1920,1080))
     W, H = W * scale, H * scale
-    artwork = Path(__file__).resolve().with_name('players_stats_background.png')
+    billie = cfg.get('stats_theme') == 'billie-jean-king-cup'
+    artwork = Path(__file__).resolve().with_name(
+        'billie_players_stats_final.png' if billie else 'players_stats_background.png')
     with Image.open(artwork) as source:
         img = source.convert('RGB').resize((W, H), Image.Resampling.LANCZOS)
     img = adjust_source_image(img, cfg)
@@ -3383,12 +3404,13 @@ def render_t6(cfg: Dict) -> Image.Image:
         y += round(H * clamp_number(cfg.get('player_offset_y_pct'), -100, 100, 0) / 100)
         img.paste(portrait, (x, y), portrait)
     draw = ImageDraw.Draw(img)
-    ink = (8, 48, 40)
+    ink = (3, 30, 77) if billie else (8, 48, 40)
     fallback = ['C:/Windows/Fonts/impact.ttf'] + _BOLD
     factory = text_font_factory(cfg,'all','bold','',fallback)
-    for key, y in [('age', .285), ('total_wl', .458), ('debut_year', .630)]:
+    stat_positions = [('age', .219), ('atp_ranking', .359), ('total_wl', .500), ('debut_year', .641)] if billie else [('age', .285), ('total_wl', .458), ('debut_year', .630)]
+    for key, y in stat_positions:
         value = apply_text_case(cfg,'all',str(cfg.get(key, '')))
-        color,start_size = styled_text(cfg,'all',ink,int(H * .115))
+        color,start_size = styled_text(cfg,'all',ink,int(H * (.10 if billie else .115)))
         font = fit_font(draw, value, int(W * .19), start_size, minimum=1, factory=factory)
         draw_text_centered(draw, value, font, int(W * .872), int(H * y), color)
     value = apply_text_case(cfg,'all',str(cfg.get('favourite_hand', '')))
@@ -3406,25 +3428,32 @@ def render_t6(cfg: Dict) -> Image.Image:
     hand_color,size = styled_text(cfg,'all',ink,int(H * .055))
     while size > 1:
         font = factory(size)
-        if max(text_bbox(draw, line, font)[0] for line in lines) <= W * .44 and len(lines) * size * 1.2 <= H * .13:
+        if max(text_bbox(draw, line, font)[0] for line in lines) <= W * .44 and len(lines) * size * 1.2 <= H * (.075 if billie else .13):
             break
         size -= 1
     for index, line in enumerate(lines):
-        draw_text_centered(draw, line, factory(size), int(W * .734), int(H * .879 + (index - (len(lines)-1)/2) * size * 1.2), hand_color)
+        draw_text_centered(draw, line, factory(size), int(W * .734), int(H * (.824 if billie else .879) + (index - (len(lines)-1)/2) * size * 1.2), hand_color)
     name = apply_text_case(cfg,'all',str(cfg.get('player_name', '')))
     country = apply_text_case(cfg,'all',str(cfg.get('country', '')))
     if name or country:
-        strip = Image.new('RGB', (int(H * .603), int(W * .072)), (8, 56, 48))
+        strip = Image.new('RGB', (int(H * .603), int(W * .072)), (3, 30, 77) if billie else (8, 56, 48))
         sd = ImageDraw.Draw(strip)
         split = int(strip.width * .72)
-        for text, cx, available, color, font_size in (
+        for index,(text, cx, available, color, font_size) in enumerate((
             (name, split / 2, split - 24 * scale, (237, 230, 232), int(W * .045)),
-            (country, (split + strip.width) / 2, strip.width - split - 24 * scale, (50, 237, 189), int(W * .027)),
-        ):
+            (country, (split + strip.width) / 2, strip.width - split - 24 * scale, (210, 255, 36) if billie else (50, 237, 189), int(W * .027)),
+        )):
             text_color,text_size = styled_text(cfg,'all',color,font_size)
-            font = fit_font(sd, text, int(available), text_size, minimum=1, factory=factory)
-            draw_text_centered(sd, text, font, int(cx), strip.height // 2, text_color)
-        sd.line([(split, 16*scale), (split, strip.height-16*scale)], fill=(237,230,232), width=2*scale)
+            lines = country_text_lines(sd,text,factory(text_size),available) if index == 1 else [text]
+            size=text_size
+            while size > 1:
+                font=factory(size)
+                if max(text_bbox(sd,line,font)[0] for line in lines)<=available and len(lines)*size*1.15<=strip.height-16*scale:
+                    break
+                size-=1
+            for line_index,line in enumerate(lines):
+                draw_text_centered(sd,line,factory(size),int(cx),round(strip.height/2+(line_index-(len(lines)-1)/2)*size*1.15),text_color)
+        sd.line([(split, 16*scale), (split, strip.height-16*scale)], fill=(210,255,36) if billie else (237,230,232), width=2*scale)
         img.paste(strip.rotate(90, expand=True), (int(W * .021), int(H * .375)))
     return img
 
@@ -3486,6 +3515,8 @@ def render_t7(cfg: Dict) -> Image.Image:
     W, H = W * scale, H * scale
     with Image.open(Path(__file__).with_name('qualifier_rounds_background.png')) as source:
         img = source.convert('RGB').resize((W,H), Image.Resampling.LANCZOS)
+    if _competition_theme.active(cfg):
+        img = _competition_theme.fixed_background(SimpleNamespace(**globals()),'t7',(W,H))
     img = adjust_source_image(img, cfg)
     draw = ImageDraw.Draw(img)
     def fitted(value, cx, cy, width, height, size, color):
@@ -3496,7 +3527,7 @@ def render_t7(cfg: Dict) -> Image.Image:
         while text_bbox(draw,value,font)[1] > H*height and font.size > 1:
             font = factory(font.size-1)
         draw_text_centered(draw,value,font,int(W*cx),int(H*cy),color)
-    ink = (2,35,24)
+    ink = (3,30,77) if _competition_theme.active(cfg) else (2,35,24)
     for suffix, flag_x, name_x, header_x in [('a',.20,.305,.352),('b',.802,.69,.665)]:
         country = str(cfg.get('country_'+suffix,''))
         code = qualifier_country_code(country)
@@ -3630,6 +3661,8 @@ def render_t9(cfg: Dict) -> Image.Image:
     W, H = T9_SIZES.get(cfg.get('canvas_size'), (1920,1080))
     with Image.open(Path(__file__).with_name('head2head_background.png')) as source:
         img = source.convert('RGB').resize((W,H), Image.Resampling.LANCZOS)
+    if _competition_theme.active(cfg):
+        img = _competition_theme.fixed_background(SimpleNamespace(**globals()),'t9',(W,H))
     img = adjust_source_image(img, cfg)
     for suffix, left in (('a',.015), ('b',.705)):
         photo = load_photo(cfg.get('photo_'+suffix,''))
@@ -3657,7 +3690,7 @@ def render_t9(cfg: Dict) -> Image.Image:
         draw_text_centered(draw,value,font,int(W*x),int(H*y),color)
     for suffix, x, footer_x in (('a',.365,.167),('b',.643,.826)):
         country = cfg.get('country_'+suffix,'')
-        fitted(country,x,.368,.103,.048,.041,(132,255,206))
+        fitted(country,x,.368,.103,.048,.041,(210,255,36) if _competition_theme.active(cfg) else (132,255,206))
         fitted(cfg.get('player_'+suffix,''),footer_x,.85,.235,.055,.047,(255,255,255))
         fitted(country,footer_x,.903,.23,.036,.032,(255,255,255))
     fitted('VS',.504,.368,.14,.047,.037,(255,255,255))
@@ -3666,7 +3699,7 @@ def render_t9(cfg: Dict) -> Image.Image:
         fitted(row.get('label',''),.504,y,.153,.047,.025,(25,32,29))
         for field,x in (('value_a',.365),('value_b',.643)):
             fitted(row.get(field,''),x,y,.101,.047,.036,(255,255,255))
-    fitted(cfg.get('meeting',''),.5,.867,.307,.089,.055,(0,58,42))
+    fitted(cfg.get('meeting',''),.5,.867,.307,.089,.055,(3,30,77) if _competition_theme.active(cfg) else (0,58,42))
     return img
 
 
@@ -3683,6 +3716,7 @@ DEF_T14 = {
     "player_path":"", "player_size_pct":100,
     "player_offset_x_pct":0, "player_offset_y_pct":0,
     "band_x_pct":50, "band_y_pct":74, "band_scale_pct":100,
+    "player_outline_px":1.5, "player_outline_color":[246,247,252],
     "transparent_background":True, "overlay_opacity_pct":100,
     "background_color":[255,255,255], "accent_color":[20,204,65],
     "band_green":[0,115,61], "band_green_dark":[0,88,48],
@@ -3723,13 +3757,29 @@ def render_t14(cfg: Dict) -> Image.Image:
     name_color = normalize_rgb(cfg.get('name_text_color'), (255, 255, 255))
     country_color = normalize_rgb(cfg.get('country_text_color'), (0, 126, 65))
 
-    draw.polygon([(4,175),(95,175),(42,430),(0,430)], fill=(*bright,255))
-    draw.polygon([(48,160),(114,160),(62,430),(18,430)], fill=(*dark_green,255))
-    draw.polygon([(92,145),(878,145),(790,430),(35,430)], fill=(*green,255))
-    draw.polygon([(835,145),(1830,145),(1768,430),(747,430)], fill=(*white,255))
-    draw.polygon([(1818,145),(1845,145),(1785,430),(1758,430)], fill=(*dark_green,255))
-    draw.polygon([(1855,145),(1898,145),(1838,430),(1796,430)], fill=(*bright,255))
-    draw.line([(94,145),(1830,145)], fill=(*separator,170), width=2)
+    # Supersample the artwork so diagonal edges retain fractional alpha coverage.
+    aa = 3
+    geometry = Image.new('RGBA', (art_w*aa, art_h*aa))
+    gd = ImageDraw.Draw(geometry)
+    def polygon(points, color):
+        gd.polygon([(x*aa,y*aa) for x,y in points],fill=(*color,255))
+    def rule(points, opacity=210, width=2):
+        gd.line([(round(x*aa),round(y*aa)) for x,y in points],fill=(*separator,opacity),width=width*aa)
+    polygon([(4,175),(95,175),(42,430),(0,430)],bright)
+    polygon([(48,160),(114,160),(62,430),(18,430)],dark_green)
+    polygon([(92,145),(878,145),(790,430),(35,430)],green)
+    polygon([(835,145),(1830,145),(1768,430),(747,430)],white)
+    polygon([(1818,145),(1845,145),(1785,430),(1758,430)],dark_green)
+    polygon([(1855,145),(1898,145),(1838,430),(1796,430)],bright)
+    polygon([(410,332),(676,332),(656,405),(410,405)],white)
+    rule([(94,145),(1898,145)],255,3)
+    rule([(0,430),(1838,430)],255,3)
+    rule([(850,292),(1764,292)])
+    for i in (1,2):
+        x = 850 + (1764-850)*i/3
+        rule([(x,170),(x,273)])
+        rule([(x,310),(x,408)])
+    art.alpha_composite(geometry.resize(T14_ART_SIZE,Image.Resampling.LANCZOS))
 
     def style(role, fallback_color, fallback_size, variant='regular'):
         color, size = styled_text(cfg, role, fallback_color, fallback_size)
@@ -3746,7 +3796,6 @@ def render_t14(cfg: Dict) -> Image.Image:
     draw_text(draw, (422,177), first, first_font, first_color)
     draw_text(draw, (414,225), last, last_font, last_color)
 
-    draw.polygon([(410,332),(676,332),(656,405),(410,405)], fill=(*white,255))
     country = apply_text_case(cfg, 'country', str(cfg.get('country', 'India')))
     country_color, country_font = style('country', country_color, 47, 'bold')
     country_font = fit_font(draw, country, 205, getattr(country_font, 'size', 47), 22,
@@ -3757,11 +3806,6 @@ def render_t14(cfg: Dict) -> Image.Image:
     stats_left, stats_right = 850, 1764
     top_y, split_y = 162, 292
     col_w = (stats_right-stats_left)/3
-    draw.line([(stats_left,split_y),(stats_right,split_y)], fill=(*separator,210), width=2)
-    for i in (1,2):
-        x = round(stats_left + col_w*i)
-        draw.line([(x,170),(x,273)], fill=(*separator,210), width=2)
-        draw.line([(x,310),(x,408)], fill=(*separator,210), width=2)
 
     label_col, label_font = style('stat_labels', label_color, 27, 'bold')
     value_col, value_font = style('stat_values', stat_green, 60, 'bold')
@@ -3794,16 +3838,24 @@ def render_t14(cfg: Dict) -> Image.Image:
         if index < 2:
             centered_fit(value, cx, split_y+55, int(col_w-34), value_font, 'stat_values', 'bold', 27, value_col)
         else:
-            lines = value.replace('\\n','\n').splitlines()[:2] or ['']
-            fitted = hand_font
-            while getattr(fitted, 'size', 14) > 14 and any(text_bbox(draw, line, fitted)[0] > col_w-25 for line in lines):
-                fitted = text_font(cfg, 'favourite_hand', getattr(fitted, 'size', 14)-1, 'bold', value)
-            total_h = sum(text_bbox(draw, line, fitted)[1] for line in lines) + 2*(len(lines)-1)
-            y = split_y + 69 - total_h//2
-            for line in lines:
-                tw, th = text_bbox(draw, line, fitted)
-                draw_text(draw, (round(cx-tw/2), y), line, fitted, hand_col)
-                y += th + 2
+            value = apply_text_case(cfg,'favourite_hand',value.replace('\\n','\n'))
+            size = getattr(hand_font,'size',27)
+            # Wrap before shrinking, retaining explicit line breaks and all entered text.
+            while True:
+                fitted = text_font(cfg,'favourite_hand',size,'bold',value)
+                lines = []
+                for paragraph in value.splitlines() or ['']:
+                    lines.extend(country_text_lines(draw,paragraph,fitted,col_w-25))
+                spacing = max(2,round(size*.15))
+                heights = [max(1,text_bbox(draw,line,fitted)[1]) for line in lines]
+                total_h = sum(heights)+spacing*(len(lines)-1)
+                if size <= 1 or (total_h <= 76 and max(text_bbox(draw,line,fitted)[0] for line in lines) <= col_w-25):
+                    break
+                size -= 1
+            y = split_y + 89 - total_h/2
+            for line, height in zip(lines,heights):
+                draw_text_centered(draw,line,fitted,round(cx),round(y+height/2),hand_col)
+                y += height + spacing
 
     portrait = load_photo(cfg.get('player_path', ''))
     portrait_h = max(1, round(420 * clamp_number(cfg.get('player_size_pct'), 20, 300, 100)/100))
@@ -3812,6 +3864,18 @@ def render_t14(cfg: Dict) -> Image.Image:
     if portrait is not None and portrait.height:
         portrait_w = max(1, round(portrait.width*portrait_h/portrait.height))
         portrait = portrait.resize((portrait_w, portrait_h), Image.LANCZOS)
+        outline_px = clamp_number(cfg.get('player_outline_px'),0,4,1.5)
+        if outline_px:
+            # Expand the existing matte, preserving soft hair rather than thresholding it.
+            pad = int(outline_px+2)
+            matte = Image.new('L',(portrait_w+2*pad,portrait_h+2*pad))
+            matte.paste(portrait.getchannel('A'),(pad,pad))
+            large = matte.resize((matte.width*aa,matte.height*aa),Image.Resampling.LANCZOS)
+            radius = max(1,round(outline_px*aa))
+            matte = large.filter(ImageFilter.MaxFilter(radius*2+1)).resize(matte.size,Image.Resampling.LANCZOS)
+            outline = Image.new('RGBA',matte.size,(*normalize_rgb(cfg.get('player_outline_color'),(246,247,252)),255))
+            outline.putalpha(matte)
+            art.alpha_composite(outline,(round(player_x-portrait_w/2)-pad,round(feet_y-portrait_h)-pad))
         art.alpha_composite(portrait, (round(player_x-portrait_w/2), round(feet_y-portrait_h)))
     else:
         placeholder = Image.new('RGBA', (220,420), (0,0,0,0))
@@ -3862,6 +3926,9 @@ DEFAULT_CONFIGS = {
 
 # Keep the additional match designs portable without importing their Qt editors.
 import importlib.util as _template_import
+_theme_spec = _template_import.spec_from_file_location('scoreboard_competition_theme',Path(__file__).with_name('scoreboard_competition_theme.py'))
+_competition_theme = _template_import.module_from_spec(_theme_spec)
+_theme_spec.loader.exec_module(_competition_theme)
 _match_spec = _template_import.spec_from_file_location('scoreboard_match_templates', Path(__file__).with_name('scoreboard_match_templates.py'))
 _match_module = _template_import.module_from_spec(_match_spec)
 _match_spec.loader.exec_module(_match_module)
@@ -3869,6 +3936,8 @@ _match_module.register(globals())
 
 
 for _broadcast_default in DEFAULT_CONFIGS.values():
+    _broadcast_default.setdefault('competition_theme','davis-cup')
+    _broadcast_default.setdefault('theme_revision',0)
     _broadcast_default['canvas_size'] = 'HD  (1920x1080)'
     _broadcast_default.setdefault('image_brightness_pct', 100)
     _broadcast_default.setdefault('image_vibrance_pct', 100)
@@ -3944,7 +4013,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
     size_options = {
         "t1":T1_SIZES,"t2":T2_SIZES,"t3":T3_SIZES,"t4":T4_SIZES,"t5":T5_SIZES,"t6":T6_SIZES,"t7":T7_SIZES,"t8":T8_SIZES,"t9":T9_SIZES,
     }
-    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19')})
+    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19','t20')})
     result: Dict[str, Dict] = {}
     for key, default in DEFAULT_CONFIGS.items():
         config = copy.deepcopy(default)
@@ -3952,7 +4021,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
         if isinstance(candidate, dict):
             config.update(copy.deepcopy(candidate))
         config["template"] = key
-        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19'):
+        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20'):
             config = {field:config.get(field,value) for field,value in default.items()}
             for field,value in default.items():
                 if isinstance(value,str):
@@ -3972,9 +4041,13 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
                 if config[role+'_align'] not in ('left','center','right'):
                     config[role+'_align']='left'
                 config[role+'_box_color']=list(normalize_rgb(config[role+'_box_color'],default[role+'_box_color']))
-        if key in ('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19'):
+        if key in ('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19', 't20'):
             config['transparent_background'] = bool(config.get('transparent_background', True))
             config['overlay_opacity_pct'] = clamp_number(config.get('overlay_opacity_pct'), 0, 100, 100)
+        if key == 't20':
+            for field,value in default.items():
+                if field.endswith('_color'):
+                    config[field]=list(normalize_rgb(config[field],value))
         if key == 't19':
             if (isinstance(candidate,dict) and 'versus_outline_color' not in candidate
                     and candidate.get('versus_panel_color') == [246,247,243]
@@ -4029,6 +4102,8 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
         if key == 't6':
             # Keep artwork fixed while allowing the portrait to be positioned.
             config = {field: config.get(field, value) for field, value in default.items()}
+            if config.get('stats_background') not in ('Original artwork','Competition theme'):
+                config['stats_background']='Original artwork'
             for field, low, high in (('player_offset_x_pct',-100,100),('player_offset_y_pct',-100,100),('player_size_pct',10,300)):
                 config[field] = clamp_number(config.get(field), low, high, default[field])
             for field in ('player_name','country','age','total_wl','debut_year','favourite_hand',
@@ -4127,6 +4202,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
             ):
                 config[field] = str(config.get(field, default[field]))[:200]
             numeric_fields = {
+                'player_outline_px':(0,4),
                 'player_size_pct':(20,300),
                 'player_offset_x_pct':(-100,100), 'player_offset_y_pct':(-100,100),
                 'band_x_pct':(-50,150), 'band_y_pct':(-50,150),
@@ -4137,7 +4213,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
             for color_key in (
                 'band_green','band_green_dark','accent_green','panel_white',
                 'stats_green','label_color','separator_color','name_text_color',
-                'country_text_color',
+                'country_text_color','player_outline_color',
             ):
                 config[color_key] = list(normalize_rgb(config.get(color_key),default[color_key]))
             config['transparent_background'] = bool(config.get('transparent_background',True))

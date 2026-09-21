@@ -35,7 +35,7 @@ SESSION_TIMEOUT_SECONDS = 30
 CHROMA_COLORS = {
     'chroma-magenta': (255, 0, 255),
 }
-OVERLAY_TEMPLATES = frozenset(('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19'))
+OVERLAY_TEMPLATES = frozenset(('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19', 't20'))
 COMPETITIONS = {'davis-cup': 'Davis Cup', 'billie-jean-king-cup': 'Billie Jean King Cup'}
 
 
@@ -281,7 +281,7 @@ class ScoreboardWebRuntime:
                         raise ValueError('Invalid template ID')
                     if not isinstance(item['player'],str) or not isinstance(item['country'],str):
                         raise ValueError('Invalid template metadata')
-                    item['config'] = self.normalized_config(item['template'], item['config'])
+                    item['config'] = self.normalized_config(item['template'], item['config'], competition)
                     entries.append(item)
                 except (OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
                     warnings.append('Unreadable template: ' + path.name)
@@ -306,7 +306,7 @@ class ScoreboardWebRuntime:
                 raise ProjectConflict('Saved template no longer exists.')
             if payload.get('edit_revision') != item['edit_revision']:
                 raise ProjectConflict('Another operator changed this template. Your preview is retained; reopen the saved version before updating.')
-            config = self.normalized_config(item['template'], payload.get('config', {}))
+            config = self.normalized_config(item['template'], payload.get('config', {}), competition)
             if item['template'] == 't8' and not config.get('media_path'):
                 raise ValueError('Upload an image or video first.')
             def portable(value):
@@ -422,7 +422,7 @@ class ScoreboardWebRuntime:
         competition = self._competition(payload.get('competition','davis-cup'))
         library_dir = self._competition_library(competition)
         template = payload.get('template')
-        config = self.normalized_config(template, payload.get('config', {}))
+        config = self.normalized_config(template, payload.get('config', {}), competition)
         player, country = (str(payload.get(field, '')).strip() for field in ('player','country'))
         if template == 't8':
             country = ''
@@ -820,6 +820,9 @@ class ScoreboardWebRuntime:
                 self.core.WEB_TEMPLATE_KEYS, self.core.WEB_TEMPLATE_NAMES
             )),
             "defaults": copy.deepcopy(self.core.DEFAULT_CONFIGS),
+            "competition_defaults": {'billie-jean-king-cup': {
+                key:self.core._competition_theme.apply(key,value,'billie-jean-king-cup')
+                for key,value in self.core.DEFAULT_CONFIGS.items()}},
             "text_targets": {
                 key: [{"key": role, "label": label} for role, label in targets]
                 for key, targets in self.core.TEXT_STYLE_TARGETS.items()
@@ -841,7 +844,7 @@ class ScoreboardWebRuntime:
                 "t8": list(self.core.T8_SIZES),
                 "t9": list(self.core.T9_SIZES),
                 "t14": list(self.core.T14_SIZES),
-                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19')},
+                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20')},
             },
             "qualifier_countries": sorted(set(json.loads((self.app_dir / 'country_flags.json').read_text(encoding='utf-8-sig')).values()) | set(self.core.QUALIFIER_ALPHA3.values())),
             "flag_countries": [
@@ -855,10 +858,14 @@ class ScoreboardWebRuntime:
             "program_monitor": True,
         }
 
-    def normalized_config(self, template: str, value: Any) -> Dict[str, Any]:
+    def normalized_config(self, template: str, value: Any, competition=None) -> Dict[str, Any]:
         if template not in self.core.WEB_TEMPLATE_KEYS:
             raise ValueError("Unknown scoreboard template.")
         config = self.core.normalise_project_configs({template: value})[template]
+        if competition is not None:
+            config = self.core._competition_theme.apply(template,config,self._competition(competition))
+        if template == 't6' and competition is not None:
+            config['stats_theme'] = self._competition(competition)
         # Browser clients choose a supported canvas, never an internal multiplier.
         config.pop('_render_scale', None)
         self._validate_image_paths(template, config)
@@ -885,6 +892,7 @@ class ScoreboardWebRuntime:
             "t17": (),
             "t18": (),
             "t19": ('photo_a','photo_b','background_path'),
+            "t20": (),
         }[template]
         for key in keys:
             config[key] = self._safe_uploaded_path(config.get(key, ""))
@@ -1550,6 +1558,9 @@ def make_handler(runtime: ScoreboardWebRuntime):
                     self._json(410, {'error':'Project editing has been retired. Use the template library.'})
                     return
                 payload = self._body()
+                if payload.get('template') in runtime.core.WEB_TEMPLATE_KEYS:
+                    payload['config'] = runtime.normalized_config(payload['template'],payload.get('config'),
+                        payload.get('competition','davis-cup'))
                 client_id = payload.get("client_id", "")
                 remote_address = self.client_address[0]
                 if path == '/api/templates/save':
