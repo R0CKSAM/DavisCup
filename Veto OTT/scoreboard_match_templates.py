@@ -243,12 +243,16 @@ def register(namespace):
                    background_color=[0,0,0],accent_color=[0,103,61],transparent_background=True,
                    text_styles={},rows=[]),
         't19':dict(common, title='COMING NEXT', versus='VS', player_a='PLAYER 1', player_b='PLAYER 2',
+                   background_mode='Transparent', background_color=[12,35,30],
                    photo_a='', photo_b='', **portraits,
                    band_x_pct=50, band_y_pct=80, band_size_pct=100,
                    title_box_color=[0,57,36], title_text_color=[255,255,255],
                    left_panel_color=[0,92,57], right_panel_color=[0,92,57],
                    left_text_color=[255,255,255], right_text_color=[255,255,255],
-                   versus_panel_color=[246,247,243], versus_text_color=[0,57,36],
+                   left_country_panel_color=[246,247,243], right_country_panel_color=[246,247,243],
+                   left_country_text_color=[0,57,36], right_country_text_color=[0,57,36],
+                   versus_panel_color=[0,57,36], versus_text_color=[211,181,92],
+                   versus_outline_color=[211,181,92],
                    transparent_background=True, overlay_opacity_pct=100),
     }
 
@@ -397,12 +401,17 @@ def register(namespace):
             return render_scoreboard_astern(cfg)
         W,H = c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
         transparent = key in ('t11','t19') and bool(cfg.get('transparent_background', True))
+        if key == 't19':
+            transparent = cfg.get('background_mode','Transparent') == 'Transparent'
         image = Image.new('RGBA' if transparent else 'RGB', (W,H),
                           (0,0,0,0) if transparent else tuple(cfg['background_color']))
         path = cfg.get('background_path') or (root/'match_stadium.png' if key not in ('t11','t19') else '')
+        if key == 't19' and cfg.get('background_mode','Transparent') != 'Image':
+            path = ''
         background = c.load_photo(str(path)) if path else None
         if background is not None and not transparent:
-            image.paste(c.cover_crop(background,W,H))
+            fitted = c.cover_crop(background,W,H)
+            image.paste(fitted,(0,0),fitted.getchannel('A') if key == 't19' and fitted.mode == 'RGBA' else None)
         if key=='t13':
             return render_news(c,image,cfg)
         if key == 't12':
@@ -488,12 +497,21 @@ def register(namespace):
                       fill=color(label+'_panel_color'),slant=.012*scale)
                 text(cfg['player_'+side],bx(cx),by(.8325),.32*scale,.065*scale,.05*scale,
                      color(label+'_text_color'),role='player_'+side)
+                country=cfg['country_'+side]
+                flag_x=cx-.104 if side == 'a' else cx+.039
+                box_x=cx-.026 if side == 'a' else cx-.104
+                flag(country,bx(flag_x),by(.885),.065*scale,.065*scale,radius=.006*scale)
+                panel(bx(box_x),by(.885),.13*scale,.065*scale,
+                      fill=color(label+'_country_panel_color'))
+                text(c.qualifier_country_label(country),bx(box_x+.065),by(.9175),
+                     .115*scale,.052*scale,.045*scale,
+                     color(label+'_country_text_color'),italic=True,role='country_'+side)
             panel(bx(.365),by(.655),.27*scale,.082*scale,
                   fill=color('title_box_color'),slant=.012*scale)
             text(cfg['title'],ox,by(.696),.24*scale,.06*scale,.046*scale,
                  color('title_text_color'),role='title')
             panel(bx(.448),by(.79),.104*scale,.085*scale,
-                  fill=color('versus_panel_color'),slant=.008*scale)
+                  fill=color('versus_panel_color'),outline=color('versus_outline_color'))
             text(cfg['versus'],ox,by(.8325),.088*scale,.065*scale,.052*scale,
                  color('versus_text_color'),role='versus')
         elif key == 't11':
@@ -544,6 +562,7 @@ def register(namespace):
     namespace['TEXT_STYLE_TARGETS']['t18']=[('all','All text'),('player_a','Top player'),
         ('player_b','Bottom player'),('score_a','Top scores'),('score_b','Bottom scores')]
     namespace['TEXT_STYLE_TARGETS']['t19']=[('all','All text'),('title','Coming Next title'),
-        ('player_a','Left player name'),('player_b','Right player name'),('versus','VS')]
+        ('player_a','Left player name'),('player_b','Right player name'),('versus','VS'),
+        ('country_a','Left country'),('country_b','Right country')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
     namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2']

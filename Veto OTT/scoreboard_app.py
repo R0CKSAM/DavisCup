@@ -3976,6 +3976,14 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
             config['transparent_background'] = bool(config.get('transparent_background', True))
             config['overlay_opacity_pct'] = clamp_number(config.get('overlay_opacity_pct'), 0, 100, 100)
         if key == 't19':
+            if (isinstance(candidate,dict) and 'versus_outline_color' not in candidate
+                    and candidate.get('versus_panel_color') == [246,247,243]
+                    and candidate.get('versus_text_color') == [0,57,36]):
+                config['versus_panel_color'] = [0,57,36]
+                config['versus_text_color'] = [211,181,92]
+            if config.get('background_mode') not in ('Transparent','Solid colour','Image'):
+                config['background_mode'] = 'Transparent'
+            config['transparent_background'] = config['background_mode'] == 'Transparent'
             for field, value in default.items():
                 if field.endswith('_color'):
                     config[field] = list(normalize_rgb(config.get(field),value))

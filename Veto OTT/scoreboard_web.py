@@ -39,6 +39,10 @@ OVERLAY_TEMPLATES = frozenset(('t5', 't11', 't14', 't15', 't16', 't17', 't18', '
 COMPETITIONS = {'davis-cup': 'Davis Cup', 'billie-jean-king-cup': 'Billie Jean King Cup'}
 
 
+def is_overlay(template, config):
+    return template in OVERLAY_TEMPLATES and (template != 't19' or config.get('background_mode','Transparent') == 'Transparent')
+
+
 class ProjectConflict(ValueError):
     pass
 IMAGE_MIME_EXTENSIONS = {
@@ -880,7 +884,7 @@ class ScoreboardWebRuntime:
             "t16": (),
             "t17": (),
             "t18": (),
-            "t19": ('photo_a','photo_b'),
+            "t19": ('photo_a','photo_b','background_path'),
         }[template]
         for key in keys:
             config[key] = self._safe_uploaded_path(config.get(key, ""))
@@ -1001,9 +1005,9 @@ class ScoreboardWebRuntime:
     ):
         config = self.normalized_config(template, value)
         if output_mode == 'external-key':
-            if template in OVERLAY_TEMPLATES:
+            if is_overlay(template,config):
                 config['transparent_background'] = True
-        if output_mode in CHROMA_COLORS and template in OVERLAY_TEMPLATES:
+        if output_mode in CHROMA_COLORS and is_overlay(template,config):
             config['transparent_background'] = True
         key,entry = self._render_entry(template,config,output_mode,output_preset)
         image = entry['image']
@@ -1142,7 +1146,7 @@ class ScoreboardWebRuntime:
                     self.live_output.update(image)
                     self.program_frame = image.copy()
                     self.program_name = dict(zip(self.core.WEB_TEMPLATE_KEYS,self.core.WEB_TEMPLATE_NAMES))[template]
-                    self.program_layout = 'overlay' if template in OVERLAY_TEMPLATES else 'full-picture'
+                    self.program_layout = 'overlay' if is_overlay(template,config) else 'full-picture'
                     self.on_air = self.program_revision = uuid.uuid4().hex
                 self.live_owner_id = requester["id"]
                 return self.live_status(requester["id"], remote_address)
@@ -1167,7 +1171,7 @@ class ScoreboardWebRuntime:
             self.program_revision = uuid.uuid4().hex
             self.on_air = None if standby else self.program_revision
             self.program_name = '' if standby else dict(zip(self.core.WEB_TEMPLATE_KEYS,self.core.WEB_TEMPLATE_NAMES))[template]
-            self.program_layout = '' if standby else ('overlay' if template in OVERLAY_TEMPLATES else 'full-picture')
+            self.program_layout = '' if standby else ('overlay' if is_overlay(template,config) else 'full-picture')
             self.live_output = output
             self.live_clear_mode = clear_mode
             self.live_preset = preset
@@ -1188,7 +1192,7 @@ class ScoreboardWebRuntime:
             mode = getattr(self,'live_clear_mode','black')
             revision = self.program_revision
         config = self.normalized_config(template,config)
-        if template in OVERLAY_TEMPLATES and (mode=='external-key' or mode in CHROMA_COLORS):
+        if is_overlay(template,config) and (mode=='external-key' or mode in CHROMA_COLORS):
             config['transparent_background'] = True
         key,entry = self._render_entry(template,config,mode,preset)
         image = entry['image']
@@ -1216,7 +1220,7 @@ class ScoreboardWebRuntime:
             self.on_air = uuid.uuid4().hex
             self.program_revision = self.on_air
             self.program_name = str(name).strip()[:100] or dict(zip(self.core.WEB_TEMPLATE_KEYS,self.core.WEB_TEMPLATE_NAMES))[template]
-            self.program_layout = 'overlay' if template in OVERLAY_TEMPLATES else 'full-picture'
+            self.program_layout = 'overlay' if is_overlay(template,config) else 'full-picture'
             if playback:
                 try:
                     playback.start()

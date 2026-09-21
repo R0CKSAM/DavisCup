@@ -257,6 +257,10 @@ function loadWorkspace(){
   saved=JSON.parse(localStorage.getItem(workspaceKey('vetoScoreboardWeb'))||'null');
  }catch{}
  configs=clone(boot.defaults);
+ const oldVs=saved?.configs?.t19;
+ if(oldVs&&!('versus_outline_color' in oldVs)&&JSON.stringify(oldVs.versus_panel_color)==='[246,247,243]'&&JSON.stringify(oldVs.versus_text_color)==='[0,57,36]'){
+  oldVs.versus_panel_color=[0,57,36];oldVs.versus_text_color=[211,181,92];
+ }
  for(const key of Object.keys(configs))configs[key]={...configs[key],...(saved?.configs?.[key]||{})};
  template=saved?.template in configs?saved.template:'t1';
  for(const cfg of Object.values(configs))if(!Object.values(boot.canvas_sizes).flat().includes(cfg.canvas_size))cfg.canvas_size='HD  (1920x1080)';
@@ -403,11 +407,14 @@ Object.assign(labels,{set_count:'Score columns',top_row_color:'Top row',bottom_r
 mainFields.t18=['canvas_size','player_a','player_b','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
 assetFields.t18=[];colorFields.t18=[['top_row_color','Top row'],['bottom_row_color','Bottom row'],['divider_color','Score dividers'],['top_text_color','Top player text'],['bottom_text_color','Bottom player text'],['top_score_color','Top scores'],['bottom_score_color','Bottom scores']];
 imageMoveChoices.t18=[['band','Whole scoreboard']];selectedLayer.t18='band';rowFields.t18=[];
-mainFields.t19=['canvas_size','title','versus','player_a','player_b','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
+mainFields.t19=['canvas_size','background_mode','title','versus','player_a','country_a','player_b','country_b','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
+labels.background_mode='Background';
 labels.versus='Centre text';
-assetFields.t19=[['photo_a','Left player image'],['photo_b','Right player image']];
-colorFields.t19=[['title_box_color','Title panel'],['title_text_color','Title text'],['left_panel_color','Left name panel'],['left_text_color','Left name text'],['right_panel_color','Right name panel'],['right_text_color','Right name text'],['versus_panel_color','Centre panel'],['versus_text_color','Centre text'],['accent_color','Panel outlines']];
+assetFields.t19=[['photo_a','Left player image'],['photo_b','Right player image'],['background_path','Background image']];
+colorFields.t19=[['title_box_color','Title panel'],['title_text_color','Title text'],['left_panel_color','Left name panel'],['left_text_color','Left name text'],['right_panel_color','Right name panel'],['right_text_color','Right name text'],['left_country_panel_color','Left country panel'],['left_country_text_color','Left country text'],['right_country_panel_color','Right country panel'],['right_country_text_color','Right country text'],['versus_panel_color','Centre panel'],['versus_text_color','Centre text'],['accent_color','Panel outlines']];
 imageMoveChoices.t19=[['band','Whole band'],['photo_a','Left player image'],['photo_b','Right player image']];selectedLayer.t19='band';rowFields.t19=[];
+colorFields.t19.unshift(['background_color','Background colour']);
+colorFields.t19.push(['versus_outline_color','Centre border']);
 labels.show_logo='Show logo';
 Object.assign(labels,{auto_text_height:'Automatic text box heights',headline_height_pct:'Manual headline height (%)',subject_height_pct:'Manual subject height (%)',auto_image_frame:'Fit frame to photo'});
 Object.assign(labels,{headline:'Headline',subject:'Subject',headline_font_size:'Headline size (px)',subject_font_size:'Subject size (px)',headline_align:'Headline alignment',subject_align:'Subject alignment',box_opacity_pct:'Box opacity (%)'});
@@ -490,7 +497,7 @@ function markChanged(rebuild=false){commit();if(rebuild)buildEditor();scheduleRe
 function scalarField(key,value,setter){
  const label=labels[key]||key.replaceAll('_',' ');let control='';
  if(typeof value==='boolean')return `<div class="field check"><input type="checkbox" data-scalar="${key}" ${value?'checked':''}><label>${esc(label)}</label></div>`;
- let choices=null;if(key==='canvas_size')choices=boot.canvas_sizes[template];else if(key==='panel_side')choices=['right','left'];else if(key==='panel_style')choices=['solid','gradient','glass'];else if(key.endsWith('_align'))choices=['left','center','right'];
+ let choices=null;if(key==='canvas_size')choices=boot.canvas_sizes[template];else if(key==='background_mode')choices=['Transparent','Solid colour','Image'];else if(key==='panel_side')choices=['right','left'];else if(key==='panel_style')choices=['solid','gradient','glass'];else if(key.endsWith('_align'))choices=['left','center','right'];
  if(choices)control=`<select data-scalar="${key}">${choices.map(x=>option(x,x,value)).join('')}</select>`;
  else if(['title','headline','subject','text_a','text_b','text'].includes(key))control=`<textarea data-scalar="${key}">${esc(value)}</textarea>`;
  else if(key==='overlay_opacity_pct')control=`<input data-scalar="${key}" type="number" min="0" max="100" step="1" value="${esc(value??100)}">`;
