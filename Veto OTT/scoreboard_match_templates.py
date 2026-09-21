@@ -242,6 +242,14 @@ def register(namespace):
                    top_score_color=[35,35,35],bottom_score_color=[255,255,255],
                    background_color=[0,0,0],accent_color=[0,103,61],transparent_background=True,
                    text_styles={},rows=[]),
+        't19':dict(common, title='COMING NEXT', versus='VS', player_a='PLAYER 1', player_b='PLAYER 2',
+                   photo_a='', photo_b='', **portraits,
+                   band_x_pct=50, band_y_pct=80, band_size_pct=100,
+                   title_box_color=[0,57,36], title_text_color=[255,255,255],
+                   left_panel_color=[0,92,57], right_panel_color=[0,92,57],
+                   left_text_color=[255,255,255], right_text_color=[255,255,255],
+                   versus_panel_color=[246,247,243], versus_text_color=[0,57,36],
+                   transparent_background=True, overlay_opacity_pct=100),
     }
 
     def render_custom_band(cfg):
@@ -388,10 +396,10 @@ def register(namespace):
         if key == 't18':
             return render_scoreboard_astern(cfg)
         W,H = c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
-        transparent = key == 't11' and bool(cfg.get('transparent_background', True))
+        transparent = key in ('t11','t19') and bool(cfg.get('transparent_background', True))
         image = Image.new('RGBA' if transparent else 'RGB', (W,H),
                           (0,0,0,0) if transparent else tuple(cfg['background_color']))
-        path = cfg.get('background_path') or (root/'match_stadium.png' if key!='t11' else '')
+        path = cfg.get('background_path') or (root/'match_stadium.png' if key not in ('t11','t19') else '')
         background = c.load_photo(str(path)) if path else None
         if background is not None and not transparent:
             image.paste(c.cover_crop(background,W,H))
@@ -431,7 +439,7 @@ def register(namespace):
             ImageDraw.Draw(mask).rounded_rectangle((0,0,size[0]-1,size[1]-1),round(W*radius),fill=255)
             image.paste(source,(round(W*x),round(H*y)),mask)
 
-        if key != 't11':
+        if key not in ('t11','t19'):
             logo=c.load_photo(cfg.get('logo_path') or str(root/'match_davis_logo.png'))
             if logo:
                 logo_width=max(1,round(W*cfg['logo_size_pct']/100))
@@ -459,6 +467,35 @@ def register(namespace):
                 panel(x,.525,.073,.085)
                 text(c.qualifier_country_label(cfg['country_'+side]),x+.0365,.567,.066,.065,.046,italic=True,role='country_'+side)
             text('VS',.503,.567,.073,.07,.055,role='versus')
+        elif key == 't19':
+            scale=cfg['band_size_pct']/100
+            ox=cfg['band_x_pct']/100; oy=cfg['band_y_pct']/100
+            def bx(x): return ox+(x-.5)*scale
+            def by(y): return oy+(y-.8)*scale
+            def color(field): return tuple(cfg[field])
+            for side,cx,label in [('a',.23,'left'),('b',.77,'right')]:
+                photo=c.load_photo(cfg.get('photo_'+side,''))
+                if photo:
+                    fit=min(W*.28/photo.width,H*.38/photo.height)*scale*cfg['photo_'+side+'_size_pct']/100
+                    photo=photo.resize((max(1,round(photo.width*fit)),max(1,round(photo.height*fit))),Image.Resampling.LANCZOS).convert('RGBA')
+                    position=(round(W*(bx(cx)+cfg['photo_'+side+'_offset_x_pct']/100)-photo.width/2),
+                              round(H*(by(.79)+cfg['photo_'+side+'_offset_y_pct']/100)-photo.height))
+                    if transparent:
+                        image.alpha_composite(photo,position)
+                    else:
+                        image.paste(photo,position,photo)
+                panel(bx(cx-.18),by(.79),.36*scale,.085*scale,
+                      fill=color(label+'_panel_color'),slant=.012*scale)
+                text(cfg['player_'+side],bx(cx),by(.8325),.32*scale,.065*scale,.05*scale,
+                     color(label+'_text_color'),role='player_'+side)
+            panel(bx(.365),by(.655),.27*scale,.082*scale,
+                  fill=color('title_box_color'),slant=.012*scale)
+            text(cfg['title'],ox,by(.696),.24*scale,.06*scale,.046*scale,
+                 color('title_text_color'),role='title')
+            panel(bx(.448),by(.79),.104*scale,.085*scale,
+                  fill=color('versus_panel_color'),slant=.008*scale)
+            text(cfg['versus'],ox,by(.8325),.088*scale,.065*scale,.052*scale,
+                 color('versus_text_color'),role='versus')
         elif key == 't11':
             scale=cfg['band_size_pct']/100
             ox=cfg['band_x_pct']/100; oy=cfg['band_y_pct']/100
@@ -506,5 +543,7 @@ def register(namespace):
     namespace['TEXT_STYLE_TARGETS']['t17']=[('all','All text'),('text','Band text')]
     namespace['TEXT_STYLE_TARGETS']['t18']=[('all','All text'),('player_a','Top player'),
         ('player_b','Bottom player'),('score_a','Top scores'),('score_b','Bottom scores')]
+    namespace['TEXT_STYLE_TARGETS']['t19']=[('all','All text'),('title','Coming Next title'),
+        ('player_a','Left player name'),('player_b','Right player name'),('versus','VS')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern']
+    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2']

@@ -3944,7 +3944,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
     size_options = {
         "t1":T1_SIZES,"t2":T2_SIZES,"t3":T3_SIZES,"t4":T4_SIZES,"t5":T5_SIZES,"t6":T6_SIZES,"t7":T7_SIZES,"t8":T8_SIZES,"t9":T9_SIZES,
     }
-    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18')})
+    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19')})
     result: Dict[str, Dict] = {}
     for key, default in DEFAULT_CONFIGS.items():
         config = copy.deepcopy(default)
@@ -3952,7 +3952,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
         if isinstance(candidate, dict):
             config.update(copy.deepcopy(candidate))
         config["template"] = key
-        if key in ('t10','t11','t12','t13','t15','t16','t17','t18'):
+        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19'):
             config = {field:config.get(field,value) for field,value in default.items()}
             for field,value in default.items():
                 if isinstance(value,str):
@@ -3972,9 +3972,13 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
                 if config[role+'_align'] not in ('left','center','right'):
                     config[role+'_align']='left'
                 config[role+'_box_color']=list(normalize_rgb(config[role+'_box_color'],default[role+'_box_color']))
-        if key in ('t5', 't11', 't14', 't15', 't16', 't17', 't18'):
+        if key in ('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19'):
             config['transparent_background'] = bool(config.get('transparent_background', True))
             config['overlay_opacity_pct'] = clamp_number(config.get('overlay_opacity_pct'), 0, 100, 100)
+        if key == 't19':
+            for field, value in default.items():
+                if field.endswith('_color'):
+                    config[field] = list(normalize_rgb(config.get(field),value))
         if key == 't18':
             config['set_count'] = int(clamp_number(config.get('set_count'), 1, 5, 3))
             for field in ('player_a','player_b','country_a','country_b'):

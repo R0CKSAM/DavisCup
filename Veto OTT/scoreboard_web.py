@@ -35,7 +35,7 @@ SESSION_TIMEOUT_SECONDS = 30
 CHROMA_COLORS = {
     'chroma-magenta': (255, 0, 255),
 }
-OVERLAY_TEMPLATES = frozenset(('t5', 't11', 't14', 't15', 't16', 't17', 't18'))
+OVERLAY_TEMPLATES = frozenset(('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19'))
 COMPETITIONS = {'davis-cup': 'Davis Cup', 'billie-jean-king-cup': 'Billie Jean King Cup'}
 
 
@@ -137,29 +137,25 @@ class ScoreboardWebRuntime:
         return value
 
     def _seed_competition_library(self):
-        # Publish the complete snapshot once; deleting/editing copies never reseeds it.
+        # Competitions share layouts, not saved presets.
         destination = self._competition_library('billie-jean-king-cup').parent
         if destination.is_dir():
+            marker = destination/'seed.json'
+            if marker.is_file() and not (destination/'templates').exists():
+                seed = json.loads(marker.read_text(encoding='utf-8'))
+                # Git does not retain an empty templates directory on fresh installs.
+                if seed.get('source') == 'empty' and seed.get('templates') == 0:
+                    (destination/'templates').mkdir()
             if not (destination/'seed.json').is_file() or not (destination/'templates').is_dir():
                 raise ValueError('Billie Jean King Cup library is incomplete; restore its backup before restarting.')
             return
-        entries = self.list_templates('davis-cup')
-        if self.library_warnings:
-            raise ValueError('Cannot copy the Davis Cup library: ' + '; '.join(self.library_warnings))
         destination.parent.mkdir(parents=True,exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix='.billie-cup-',dir=destination.parent))
         templates = staging/'templates'
         templates.mkdir()
         now = datetime.now(timezone.utc).isoformat()
-        for source in entries:
-            item = dict(id=uuid.uuid4().hex,template=source['template'],player=source['player'],
-                country=source['country'],config=self._portable_config(source['config']),updated_at=now)
-            with (templates/(item['id']+'.json')).open('x',encoding='utf-8') as stream:
-                json.dump(item,stream,ensure_ascii=False)
-                stream.flush()
-                os.fsync(stream.fileno())
         with (staging/'seed.json').open('x',encoding='utf-8') as stream:
-            json.dump(dict(source='davis-cup',created_at=now,templates=len(entries)),stream)
+            json.dump(dict(source='empty',created_at=now,templates=0),stream)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(staging,destination)
@@ -841,7 +837,7 @@ class ScoreboardWebRuntime:
                 "t8": list(self.core.T8_SIZES),
                 "t9": list(self.core.T9_SIZES),
                 "t14": list(self.core.T14_SIZES),
-                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18')},
+                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19')},
             },
             "qualifier_countries": sorted(set(json.loads((self.app_dir / 'country_flags.json').read_text(encoding='utf-8-sig')).values()) | set(self.core.QUALIFIER_ALPHA3.values())),
             "flag_countries": [
@@ -884,6 +880,7 @@ class ScoreboardWebRuntime:
             "t16": (),
             "t17": (),
             "t18": (),
+            "t19": ('photo_a','photo_b'),
         }[template]
         for key in keys:
             config[key] = self._safe_uploaded_path(config.get(key, ""))

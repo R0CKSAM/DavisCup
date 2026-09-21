@@ -176,7 +176,7 @@ new ResizeObserver(entries=>document.documentElement.style.setProperty('--header
 let boot,configs={},template='t1',history=[],historyIndex=-1,renderTimer=null,renderToken=0,previewUrl='',drag=null;
 let competition='davis-cup',competitionSwitching=false,workspaceEpoch=0;
 const COMPETITION_STORAGE_KEY='vetoScoreboardCompetition';
-function workspaceKey(base,key=competition){return key==='davis-cup'?base:base+':'+key}
+function workspaceKey(base,key=competition){return key==='davis-cup'?base:base+':'+key+':empty-v2'}
 const clientId=localStorage.getItem('vetoScoreboardClientId')||(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`);
 localStorage.setItem('vetoScoreboardClientId',clientId);
 let latestLive={active:false},latestSessions={sessions:[],can_manage:false};
@@ -255,10 +255,6 @@ function loadWorkspace(){
  let saved=null;
  try{
   saved=JSON.parse(localStorage.getItem(workspaceKey('vetoScoreboardWeb'))||'null');
-  if(!saved&&competition==='billie-jean-king-cup'){
-   const davis=JSON.parse(localStorage.getItem(workspaceKey('vetoScoreboardWeb','davis-cup'))||'null');
-   if(davis?.configs)saved={template:davis.template,configs:clone(davis.configs)};
-  }
  }catch{}
  configs=clone(boot.defaults);
  for(const key of Object.keys(configs))configs[key]={...configs[key],...(saved?.configs?.[key]||{})};
@@ -407,6 +403,11 @@ Object.assign(labels,{set_count:'Score columns',top_row_color:'Top row',bottom_r
 mainFields.t18=['canvas_size','player_a','player_b','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
 assetFields.t18=[];colorFields.t18=[['top_row_color','Top row'],['bottom_row_color','Bottom row'],['divider_color','Score dividers'],['top_text_color','Top player text'],['bottom_text_color','Bottom player text'],['top_score_color','Top scores'],['bottom_score_color','Bottom scores']];
 imageMoveChoices.t18=[['band','Whole scoreboard']];selectedLayer.t18='band';rowFields.t18=[];
+mainFields.t19=['canvas_size','title','versus','player_a','player_b','band_x_pct','band_y_pct','band_size_pct','overlay_opacity_pct'];
+labels.versus='Centre text';
+assetFields.t19=[['photo_a','Left player image'],['photo_b','Right player image']];
+colorFields.t19=[['title_box_color','Title panel'],['title_text_color','Title text'],['left_panel_color','Left name panel'],['left_text_color','Left name text'],['right_panel_color','Right name panel'],['right_text_color','Right name text'],['versus_panel_color','Centre panel'],['versus_text_color','Centre text'],['accent_color','Panel outlines']];
+imageMoveChoices.t19=[['band','Whole band'],['photo_a','Left player image'],['photo_b','Right player image']];selectedLayer.t19='band';rowFields.t19=[];
 labels.show_logo='Show logo';
 Object.assign(labels,{auto_text_height:'Automatic text box heights',headline_height_pct:'Manual headline height (%)',subject_height_pct:'Manual subject height (%)',auto_image_frame:'Fit frame to photo'});
 Object.assign(labels,{headline:'Headline',subject:'Subject',headline_font_size:'Headline size (px)',subject_font_size:'Subject size (px)',headline_align:'Headline alignment',subject_align:'Subject alignment',box_opacity_pct:'Box opacity (%)'});
@@ -510,7 +511,7 @@ function buildImageAdjustments(){const cfg=getConfig();return group('Image adjus
 function rowsTable(rows,fields,path){let head=fields.map(f=>`<th>${esc(rowLabels[f]||f)}</th>`).join('');let body=rows.map((row,i)=>`<tr>${fields.map(f=>`<td><input data-row-path="${path}" data-row-index="${i}" data-row-field="${f}" value="${esc(row[f]??'')}"></td>`).join('')}<td style="width:35px"><button class="icon-button" data-remove-row="${path}" data-row-index="${i}" title="Remove">×</button></td></tr>`).join('');return `<table class="row-table"><thead><tr>${head}<th style="width:35px"></th></tr></thead><tbody>${body}</tbody></table><div class="button-row"><button data-add-row="${path}">Add stat</button></div>`}
 function buildRows(){const cfg=getConfig();if(['t4','t5','t14','t15','t16','t17','t18'].includes(template))return '';return group('Stat rows',rowsTable(cfg.rows||[],rowFields[template],'rows'))}
 function buildPlayers(){if(template!=='t4')return '';const cfg=getConfig();return group('Players',cfg.players.map((p,i)=>`<div class="player"><h3>Player ${i+1}</h3><div class="grid">${['team','first','last','result','photo_zoom','photo_focus_x','photo_focus_y'].map(k=>`<div class="field"><label>${labels[k]}</label><input data-player="${i}" data-player-field="${k}" type="${typeof p[k]==='number'?'number':'text'}" value="${esc(p[k]??'')}"></div>`).join('')}</div>${rowsTable(p.stats||[],rowFields.t4,`players.${i}.stats`)}</div>`).join(''))}
-function buildEditor(){const base=template==='t18'?buildScoreboardAstern():template==='t15'?buildMain()+buildAssets():template==='t13'?buildMain()+buildAssets()+buildColors()+buildTextStyles():['t10','t11','t12'].includes(template)?buildMatchTemplate():template==='t9'?buildPlayerLibrary()+buildHead2Head()+buildTextStyles():template==='t8'?buildMedia()+buildMain()+(boot.custom_text_boxes?buildCustomBoxes():''):template==='t7'?buildMain()+buildQualifierRows()+buildTextStyles():template==='t6'?buildMain()+group('Player image',uploadField('player_path','Player image',getConfig().player_path))+buildStoredStats()+buildTextStyles():buildMain()+buildRows()+buildPlayers()+'<details class="editor-detail"><summary>Images and positioning</summary>'+buildAssets()+'</details><details class="editor-detail"><summary>Colors and typography</summary>'+buildColors()+buildTextStyles()+'</details>';const content=base+(template==='t18'?'':buildImageAdjustments());$('editor').innerHTML='<fieldset class="editor-fields" id="editorFields">'+content+'</fieldset>';bindEditor();bindPlayerLibrary();bindCustomBoxes();bindAstern();syncTextBoxes();syncImageTools();syncProjectLock()}
+function buildEditor(){const base=template==='t18'?buildScoreboardAstern():template==='t15'?buildMain()+buildAssets():template==='t13'?buildMain()+buildAssets()+buildColors()+buildTextStyles():['t10','t11','t12','t19'].includes(template)?buildMatchTemplate():template==='t9'?buildPlayerLibrary()+buildHead2Head()+buildTextStyles():template==='t8'?buildMedia()+buildMain()+(boot.custom_text_boxes?buildCustomBoxes():''):template==='t7'?buildMain()+buildQualifierRows()+buildTextStyles():template==='t6'?buildMain()+group('Player image',uploadField('player_path','Player image',getConfig().player_path))+buildStoredStats()+buildTextStyles():buildMain()+buildRows()+buildPlayers()+'<details class="editor-detail"><summary>Images and positioning</summary>'+buildAssets()+'</details><details class="editor-detail"><summary>Colors and typography</summary>'+buildColors()+buildTextStyles()+'</details>';const content=base+(template==='t18'?'':buildImageAdjustments());$('editor').innerHTML='<fieldset class="editor-fields" id="editorFields">'+content+'</fieldset>';bindEditor();bindPlayerLibrary();bindCustomBoxes();bindAstern();syncTextBoxes();syncImageTools();syncProjectLock()}
 
 function bindAstern(){if(template!=='t18')return;document.querySelectorAll('[data-country-name]').forEach(input=>{const update=()=>{const key=input.dataset.countryName;getConfig()[key]=input.value;const record=flagRecord(input.value),image=document.querySelector(`[data-country-preview="${key}"]`);image.style.visibility=record?'visible':'hidden';if(record)image.src=flagUrl(record.code);scheduleRender()};input.oninput=update;input.onchange=()=>{update();commit()}});if($('asternSetCount'))$('asternSetCount').onchange=()=>{getConfig().set_count=Number($('asternSetCount').value);markChanged(true)};document.querySelectorAll('[data-score-side]').forEach(input=>{const update=()=>{const key='scores_'+input.dataset.scoreSide;getConfig()[key]=getConfig()[key]||['','','','',''];getConfig()[key][+input.dataset.scoreIndex]=input.value};input.oninput=()=>{update();scheduleRender()};input.onchange=()=>{update();commit()}})}
 
@@ -578,8 +579,8 @@ function moveTarget(){
  const cfg=getConfig(),key=selectedLayer[template];
  if(key.startsWith('text:')){const role=key.slice(5);cfg.text_styles=cfg.text_styles||{};cfg.text_styles[role]=cfg.text_styles[role]||{};return {obj:cfg.text_styles[role],x:'x_pct',y:'y_pct',size:'size_pct',min:50,max:200,xMin:-100,xMax:100,yMin:-100,yMax:100,defaultX:0,defaultY:0}}
  if(template==='t13')return {obj:cfg,x:'image_offset_x_pct',y:'image_offset_y_pct',size:'image_size_pct',min:10,max:200,xMin:-100,xMax:100,yMin:-100,yMax:100,defaultX:0,defaultY:0};
- if(template==='t9'||(template==='t10'&&key.startsWith('photo_')))return {obj:cfg,x:key+'_offset_x_pct',y:key+'_offset_y_pct',size:key+'_size_pct',min:10,max:template==='t10'?200:300,xMin:-100,xMax:100,yMin:-100,yMax:100,defaultX:0,defaultY:0};
- if(template==='t11')return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:0,xMax:100,yMin:0,yMax:100};
+ if(template==='t9'||(['t10','t19'].includes(template)&&key.startsWith('photo_')))return {obj:cfg,x:key+'_offset_x_pct',y:key+'_offset_y_pct',size:key+'_size_pct',min:10,max:template==='t9'?300:200,xMin:-100,xMax:100,yMin:-100,yMax:100,defaultX:0,defaultY:0};
+ if(['t11','t19'].includes(template))return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:0,xMax:100,yMin:0,yMax:100};
  if(template==='t15')return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:-50,xMax:150,yMin:-50,yMax:150};
  if(['t16','t17','t18'].includes(template))return {obj:cfg,x:'band_x_pct',y:'band_y_pct',size:'band_size_pct',min:10,max:200,xMin:-50,xMax:150,yMin:-50,yMax:150};
  if(['t10','t12'].includes(template))return {obj:cfg,x:'logo_x_pct',y:'logo_y_pct',size:'logo_size_pct',min:10,max:200,xMin:0,xMax:100,yMin:0,yMax:100};
@@ -608,7 +609,7 @@ function moveTarget(){
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function targetNumber(obj,key,fallback){const value=Number(obj[key]);return Number.isFinite(value)?value:fallback}
 function selectedUploadKey(){const key=selectedLayer[template];if(['t6','t14'].includes(template))return 'player_path';if(template==='t5')return key==='background_path'?'background_path':'player_path';return key.startsWith('player_')?`player.${key.split('_')[1]}.photo`:key}
-function selectedImagePath(){const cfg=getConfig(),key=selectedLayer[template];if(key.startsWith('text:'))return true;if(['t16','t17','t18'].includes(template))return true;if(template==='t6')return cfg.player_path;if(template==='t14')return key==='band'?true:cfg.player_path;if(template==='t5')return key==='background_path'?cfg.background_path:true;return key.startsWith('player_')?cfg.players[+key.split('_')[1]].photo:cfg[key]}
+function selectedImagePath(){const cfg=getConfig(),key=selectedLayer[template];if(key.startsWith('text:'))return true;if(template==='t19'&&key==='band')return true;if(['t16','t17','t18'].includes(template))return true;if(template==='t6')return cfg.player_path;if(template==='t14')return key==='band'?true:cfg.player_path;if(template==='t5')return key==='background_path'?cfg.background_path:true;return key.startsWith('player_')?cfg.players[+key.split('_')[1]].photo:cfg[key]}
 function syncImageTools(){
  if(template==='t8'){document.querySelector('.preview-tools').hidden=true;return}
  document.querySelector('.preview-tools').hidden=false;
