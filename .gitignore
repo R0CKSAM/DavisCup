@@ -1,0 +1,57 @@
+# D:\ is the repository root. Ignore everything unless explicitly allowed.
+/*
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/Veto OTT/
+/Veto OTT/*
+
+# Application source, launch/setup scripts, and required bundled graphic assets.
+!/Veto OTT/scoreboard_app.py
+!/Veto OTT/scoreboard_web.py
+!/Veto OTT/scoreboard_web.html
+!/Veto OTT/scoreboard_media.py
+!/Veto OTT/scoreboard_match_templates.py
+!/Veto OTT/scoreboard_output_probe.py
+!/Veto OTT/requirements.txt
+!/Veto OTT/scoreboard_settings.ps1
+!/Veto OTT/setup_scoreboard.ps1
+!/Veto OTT/start_scoreboard.ps1
+!/Veto OTT/stop_scoreboard.ps1
+!/Veto OTT/restart_scoreboard.ps1
+!/Veto OTT/enable_lan_access.ps1
+!/Veto OTT/apply_code_update.ps1
+!/Veto OTT/country_flags.json
+!/Veto OTT/country_flags.zip
+!/Veto OTT/head2head_background.png
+!/Veto OTT/match_davis_logo.png
+!/Veto OTT/match_stadium.png
+!/Veto OTT/players_stats_background.png
+!/Veto OTT/qualifier_rounds_background.png
+!/Veto OTT/import_davis_players.py
+!/Veto OTT/publish_davis_presets.py
+!/Veto OTT/fill_davis_photos.py
+!/Veto OTT/fill_qualifier_results.py
+!/Veto OTT/prepare_korea_preview.py
+!/Veto OTT/davis_2026_round1_results.json
+!/Veto OTT/davis_cup_2026_round2.csv
+!/Veto OTT/DAVIS_PLAYER_IMPORT.md
+!/Veto OTT/QUALIFIER_ROUNDS.txt
+!/Veto OTT/README.txt
+
+# Never include machine state, operator data, credentials or installed tools.
+**/.env
+**/.env.*
+**/*credentials*
+**/*.pem
+**/*.key
+**/__pycache__/
+**/*.pyc
+/Veto OTT/data/
+/Veto OTT/logs/
+/Veto OTT/backups/
+/Veto OTT/python_packages/
+/Veto OTT/packages/
+/Veto OTT/wheels/
+/Veto OTT/tools/
+/Veto OTT/*.lnk
