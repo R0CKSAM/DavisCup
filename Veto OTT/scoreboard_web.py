@@ -844,7 +844,7 @@ class ScoreboardWebRuntime:
                 "t8": list(self.core.T8_SIZES),
                 "t9": list(self.core.T9_SIZES),
                 "t14": list(self.core.T14_SIZES),
-                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20')},
+                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20','t21')},
             },
             "qualifier_countries": sorted(set(json.loads((self.app_dir / 'country_flags.json').read_text(encoding='utf-8-sig')).values()) | set(self.core.QUALIFIER_ALPHA3.values())),
             "flag_countries": [
@@ -893,6 +893,7 @@ class ScoreboardWebRuntime:
             "t18": (),
             "t19": ('photo_a','photo_b','background_path'),
             "t20": (),
+            "t21": ('background_path',),
         }[template]
         for key in keys:
             config[key] = self._safe_uploaded_path(config.get(key, ""))

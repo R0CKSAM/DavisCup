@@ -19,7 +19,7 @@ def apply(template, cfg, competition):
     if competition != BILLIE:
         cfg['competition_theme'] = 'davis-cup'
         return cfg
-    if template == 't20':
+    if template in ('t20','t21'):
         cfg.update(competition_theme=BILLIE,theme_revision=1)
         return cfg
     if cfg.get('competition_theme') == BILLIE and cfg.get('theme_revision') == 1:
@@ -87,14 +87,18 @@ def fixed_background(c,template,size):
         panel((.506,.681,.962,.752),NAVY)
         label('FAVOURITE HAND',.734,.715,.42,.045)
     elif template=='t7':
-        label('QUALIFIER ROUNDS',.5,.18,.80,.070)
-        panel((.15,.32,.85,.43),NAVY,LIME)
-        panel((.425,.305,.575,.4),WHITE,LIME)
-        panel((.235,.50,.82,.568),LIME)
+        panel((.15,.12,.85,.235),NAVY)
+        panel((.15,.232,.85,.237),LIME)
+        label('QUALIFIER ROUNDS',.5,.177,.64,.062)
+        panel((.15,.285,.85,.415),NAVY)
+        panel((.435,.285,.565,.415),LIME)
+        panel((.15,.465,.85,.535),NAVY)
+        panel((.15,.465,.85,.469),LIME)
         for i in range(5):
-            y=.604+i*.0702
-            panel((.235,y-.032,.82,y+.032),WHITE)
-            draw.line((round(W*.505),round(H*(y-.032)),round(W*.505),round(H*(y+.032))),fill=tuple(BLUE),width=2)
+            y=.548+i*.070
+            panel((.15,y,.85,y+.066),WHITE if i%2==0 else [228,236,250])
+            draw.line((round(W*.5),round(H*y),round(W*.5),round(H*(y+.066))),fill=tuple(BLUE),width=max(1,round(W/960)))
+        draw.line((round(W*.5),round(H*.475),round(W*.5),round(H*.525)),fill=tuple(LIME),width=max(1,round(W/960)))
     elif template=='t9':
         panel((.30,.15,.708,.295),NAVY,LIME)
         label('HEAD TO HEAD',.504,.222,.38,.058)

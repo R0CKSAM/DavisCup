@@ -265,6 +265,75 @@ def register(namespace):
         title_color=[255,255,255],date_color=[255,255,255],country_color=[3,30,77],
         score_a_color=[50,237,189],score_b_color=[255,255,255],divider_color=[50,237,189])
 
+    defaults['t21'] = dict(template='t21',canvas_size='HD  (1920x1080)',
+        country='Belgium',player_1='Hanne Vandewinkel',player_2='Greet Minnen',
+        player_3='Jana Otzipka',player_4='Magali Kempen',player_5='Lara Salden',
+        panel_style='solid',panel_color=[6,40,106],panel_color_2=[10,67,156],
+        panel_text_color=[255,255,255],country_color=[255,255,255],
+        border_color=[212,225,255],divider_color=[64,100,159],
+        accent_color=[210,255,36],background_color=[3,30,77],background_path='',
+        band_x_pct=50,band_y_pct=50,band_size_pct=100,
+        panel_width_pct=48,panel_height_pct=88,text_styles={},rows=[])
+
+    def render_player_list(cfg):
+        W,H=c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
+        source=c.load_photo(cfg.get('background_path') or str(root/'player_list_background.png'))
+        image=Image.new('RGBA',(W,H),(*cfg['background_color'],255))
+        if source is not None:
+            ratio=max(W/source.width,H/source.height)
+            source=source.resize((max(W,round(source.width*ratio)),max(H,round(source.height*ratio))),Image.Resampling.LANCZOS)
+            image.alpha_composite(source,((W-source.width)//2,(H-source.height)//2))
+        scale=c.clamp_number(cfg.get('band_size_pct'),10,200,100)/100
+        pw=max(40,round(W*cfg['panel_width_pct']/100*scale))
+        ph=max(80,round(H*cfg['panel_height_pct']/100*scale))
+        panel=Image.new('RGBA',(pw,ph))
+        draw=ImageDraw.Draw(panel)
+        top=tuple(cfg['panel_color']);bottom=tuple(cfg['panel_color_2'])
+        if cfg.get('panel_style')=='gradient':
+            for y in range(ph):
+                t=y/max(1,ph-1)
+                draw.line((0,y,pw,y),fill=tuple(round(a+(b-a)*t) for a,b in zip(top,bottom))+(255,))
+        else:
+            draw.rectangle((0,0,pw-1,ph-1),fill=top+(255,))
+        border=max(1,round(W/960))
+        draw.rectangle((0,0,pw-1,ph-1),outline=tuple(cfg['border_color']),width=border)
+        pad=round(pw*.065)
+        draw.rectangle((pad,round(ph*.255),pw-pad,round(ph*.259)),fill=tuple(cfg['accent_color']))
+
+        def label(role,value,y,max_height,size,color,uppercase=False):
+            value=c.apply_text_case(cfg,role,str(value))
+            if uppercase and not c._text_role_override(cfg,role,'case'):
+                value=value.upper()
+            color,size=c.styled_text(cfg,role,tuple(color),round(size))
+            factory=c.text_font_factory(cfg,role,'bold',value)
+            lines=c.country_text_lines(draw,value,factory(size),pw-2*pad) if role=='country' else [' '.join(value.split())]
+            while size>1:
+                font=factory(size)
+                if max(c.text_bbox(draw,line,font)[0] for line in lines)<=pw-2*pad and len(lines)*size*1.15<=max_height:
+                    break
+                size-=1
+            for i,line in enumerate(lines):
+                c.draw_text(draw,(pad,round(y+(i-(len(lines)-1)/2)*size*1.15)),line,factory(size),color,anchor='lm')
+
+        country=cfg.get('country','')
+        code=c.qualifier_country_code(country)
+        if code:
+            with zipfile.ZipFile(root/'country_flags.zip') as archive:
+                flag=Image.open(io.BytesIO(archive.read(code+'.png'))).convert('RGBA')
+            flag.thumbnail((round(pw*.17),round(ph*.085)),Image.Resampling.LANCZOS)
+            panel.alpha_composite(flag,(pad,round(ph*.045)))
+        label('country',country,ph*.19,ph*.115,ph*.061,cfg['country_color'],True)
+        for index in range(5):
+            y=ph*(.325+index*.14)
+            label('player_'+str(index+1),cfg.get('player_'+str(index+1),''),y,ph*.095,ph*.041,cfg['panel_text_color'])
+            if index<4:
+                line_y=round(ph*(.395+index*.14))
+                draw.line((pad,line_y,pw-pad,line_y),fill=tuple(cfg['divider_color']),width=max(1,round(H/1080)))
+        cx=W*c.clamp_number(cfg.get('band_x_pct'),-50,150,50)/100
+        cy=H*c.clamp_number(cfg.get('band_y_pct'),-50,150,50)/100
+        image.alpha_composite(panel,(round(cx-pw/2),round(cy-ph/2)))
+        return image.convert('RGB')
+
     def render_qualifier_band(cfg):
         W,H = c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
         image = Image.new('RGBA',(W,H))
@@ -460,6 +529,8 @@ def register(namespace):
 
     def render(cfg):
         key = cfg['template']
+        if key == 't21':
+            return render_player_list(cfg)
         if key == 't20':
             return render_qualifier_band(cfg)
         if key == 't15':
@@ -637,5 +708,6 @@ def register(namespace):
         ('player_a','Left player name'),('player_b','Right player name'),('versus','VS'),
         ('country_a','Left country'),('country_b','Right country')]
     namespace['TEXT_STYLE_TARGETS']['t20']=[('all','All text'),('title','Title'),('date_text','Date'),('country_a','Left country'),('country_b','Right country'),('score_a','Left score'),('score_b','Right score')]
+    namespace['TEXT_STYLE_TARGETS']['t21']=[('all','All text'),('country','Country')]+[('player_'+str(i),'Player '+str(i)) for i in range(1,6)]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band']
+    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List']

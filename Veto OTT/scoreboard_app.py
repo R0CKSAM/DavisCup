@@ -3413,26 +3413,16 @@ def render_t6(cfg: Dict) -> Image.Image:
         color,start_size = styled_text(cfg,'all',ink,int(H * (.10 if billie else .115)))
         font = fit_font(draw, value, int(W * .19), start_size, minimum=1, factory=factory)
         draw_text_centered(draw, value, font, int(W * .872), int(H * y), color)
-    value = apply_text_case(cfg,'all',str(cfg.get('favourite_hand', '')))
-    lines = value.splitlines() or ['']
-    if len(lines) > 2:
-        lines = [lines[0], ' '.join(lines[1:])]
-    if len(lines) == 1 and ' (' in value:
-        head, tail = value.split(' (', 1)
-        lines = [head, '(' + tail]
-    if len(lines) == 1 and len(value) > 25:
-        words = value.split()
-        best = min(range(1, len(words)), key=lambda n: abs(len(' '.join(words[:n])) - len(' '.join(words[n:]))), default=0)
-        if best:
-            lines = [' '.join(words[:best]), ' '.join(words[best:])]
+    value = apply_text_case(cfg,'all',' '.join(str(cfg.get('favourite_hand', '')).replace('\\n',' ').split()))
     hand_color,size = styled_text(cfg,'all',ink,int(H * .055))
+    hand_factory = text_font_factory(cfg,'all','bold',value,_BOLD)
     while size > 1:
-        font = factory(size)
-        if max(text_bbox(draw, line, font)[0] for line in lines) <= W * .44 and len(lines) * size * 1.2 <= H * (.075 if billie else .13):
+        font = hand_factory(size)
+        width,height = text_bbox(draw,value,font)
+        if width <= W * .43 and height <= H * (.062 if billie else .10):
             break
         size -= 1
-    for index, line in enumerate(lines):
-        draw_text_centered(draw, line, factory(size), int(W * .734), int(H * (.824 if billie else .879) + (index - (len(lines)-1)/2) * size * 1.2), hand_color)
+    draw_text_centered(draw,value,hand_factory(size),int(W*.734),int(H*(.824 if billie else .879)),hand_color)
     name = apply_text_case(cfg,'all',str(cfg.get('player_name', '')))
     country = apply_text_case(cfg,'all',str(cfg.get('country', '')))
     if name or country:
@@ -3527,8 +3517,11 @@ def render_t7(cfg: Dict) -> Image.Image:
         while text_bbox(draw,value,font)[1] > H*height and font.size > 1:
             font = factory(font.size-1)
         draw_text_centered(draw,value,font,int(W*cx),int(H*cy),color)
-    ink = (3,30,77) if _competition_theme.active(cfg) else (2,35,24)
-    for suffix, flag_x, name_x, header_x in [('a',.20,.305,.352),('b',.802,.69,.665)]:
+    billie = _competition_theme.active(cfg)
+    ink = (3,30,77) if billie else (2,35,24)
+    country_positions = [('a',.205,.32,.325),('b',.795,.68,.675)] if billie else [('a',.20,.305,.352),('b',.802,.69,.665)]
+    country_y = .35 if billie else .376
+    for suffix, flag_x, name_x, header_x in country_positions:
         country = str(cfg.get('country_'+suffix,''))
         code = qualifier_country_code(country)
         if code:
@@ -3536,15 +3529,15 @@ def render_t7(cfg: Dict) -> Image.Image:
                 with Image.open(io.BytesIO(archive.read(code+'.png'))) as source:
                     flag = source.convert('RGBA')
             flag.thumbnail((int(W*.073),int(H*.085)),Image.Resampling.LANCZOS)
-            img.paste(flag,(int(W*flag_x-flag.width/2),int(H*.376-flag.height/2)),flag)
+            img.paste(flag,(int(W*flag_x-flag.width/2),int(H*country_y-flag.height/2)),flag)
         label = qualifier_country_label(country)
-        fitted(label,name_x,.376,.155,.08,.052,(255,255,255))
-        fitted(label,header_x,.535,.28,.055,.050,(0,0,0))
-    fitted(cfg.get('score',''),.50,.35,.13,.07,.075,ink)
+        fitted(label,name_x,country_y,.155,.08,.052,(255,255,255))
+        fitted(label,header_x,.5 if billie else .535,.28,.050 if billie else .055,.042 if billie else .050,(246,247,252) if billie else (0,0,0))
+    fitted(cfg.get('score',''),.50,.35,.108 if billie else .13,.07,.068 if billie else .075,ink)
     for index,row in enumerate(cfg.get('rows',[])[:5]):
-        y = .604 + index*.0702
-        fitted(row.get('value_a',''),.385,y,.224,.057,.034,ink)
-        fitted(row.get('value_b',''),.666,y,.302,.057,.034,ink)
+        y = .581 + index*.070 if billie else .604 + index*.0702
+        fitted(row.get('value_a',''),.325 if billie else .385,y,.31 if billie else .224,.048 if billie else .057,.034,ink)
+        fitted(row.get('value_b',''),.675 if billie else .666,y,.31 if billie else .302,.048 if billie else .057,.034,ink)
     return img
 
 
@@ -4013,7 +4006,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
     size_options = {
         "t1":T1_SIZES,"t2":T2_SIZES,"t3":T3_SIZES,"t4":T4_SIZES,"t5":T5_SIZES,"t6":T6_SIZES,"t7":T7_SIZES,"t8":T8_SIZES,"t9":T9_SIZES,
     }
-    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19','t20')})
+    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19','t20','t21')})
     result: Dict[str, Dict] = {}
     for key, default in DEFAULT_CONFIGS.items():
         config = copy.deepcopy(default)
@@ -4021,7 +4014,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
         if isinstance(candidate, dict):
             config.update(copy.deepcopy(candidate))
         config["template"] = key
-        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20'):
+        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20','t21'):
             config = {field:config.get(field,value) for field,value in default.items()}
             for field,value in default.items():
                 if isinstance(value,str):
@@ -4044,7 +4037,13 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
         if key in ('t5', 't11', 't14', 't15', 't16', 't17', 't18', 't19', 't20'):
             config['transparent_background'] = bool(config.get('transparent_background', True))
             config['overlay_opacity_pct'] = clamp_number(config.get('overlay_opacity_pct'), 0, 100, 100)
-        if key == 't20':
+        if key == 't21':
+            if config['panel_style'] not in ('solid','gradient'):
+                config['panel_style']='solid'
+            for field in ('panel_width_pct','panel_height_pct'):
+                config[field]=clamp_number(config[field],20,100,default[field])
+            config['panel_color_2']=list(normalize_rgb(config['panel_color_2'],default['panel_color_2']))
+        if key in ('t20','t21'):
             for field,value in default.items():
                 if field.endswith('_color'):
                     config[field]=list(normalize_rgb(config[field],value))
