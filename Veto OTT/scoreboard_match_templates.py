@@ -186,7 +186,11 @@ def render_news(c,image,cfg):
     rail=(round(W*.025),round(H*.09),round(W*.085),round(H*.83))
     rail_styles=copy.deepcopy(cfg.get('text_styles',{}))
     rail_styles['headline']=copy.deepcopy(rail_styles.get('rail_text',{}))
-    rail_cfg=dict(cfg,headline=cfg.get('rail_text','Billi Jean King cup 2026'),headline_align='center',headline_font_size=cfg.get('rail_font_size',70),text_styles=rail_styles,
+    rail_styles['headline']['case']='UPPERCASE'
+    rail_value=cfg.get('rail_text','BILLIE JEAN KING CUP 2026')
+    if ' '.join(rail_value.upper().split())=='BILLI JEAN KING CUP 2026':
+        rail_value='BILLIE JEAN KING CUP 2026'
+    rail_cfg=dict(cfg,headline=rail_value,headline_align='center',headline_font_size=cfg.get('rail_font_size',78),text_styles=rail_styles,
                   box_opacity_pct=0,_news_scale=H/1080)
     text=news_text_layer(c,rail_cfg,'headline',(rail[3]-2*inset,rail[2]-2*inset)).rotate(90,expand=True)
     panel(rail,(3,30,77) if c._competition_theme.active(cfg) else (0,54,42),text)
@@ -220,7 +224,7 @@ def register(namespace):
                    auto_text_height=True,headline_height_pct=16,subject_height_pct=40,auto_image_frame=True,
                    background_color=[0,30,40],accent_color=[38,199,153],text_styles={},rows=[],
                    headline='NEWS HEADLINE',subject='',headline_font_size=68,subject_font_size=42,
-                   rail_text='Billi Jean King cup 2026',rail_font_size=70,
+                   rail_text='BILLIE JEAN KING CUP 2026',rail_font_size=78,
                    headline_align='center',subject_align='left',headline_box_color=[0,68,52],
                    subject_box_color=[0,68,52],box_opacity_pct=94,
                    image_offset_x_pct=0,image_offset_y_pct=0,image_size_pct=100),
@@ -351,14 +355,14 @@ def register(namespace):
                         flag=Image.open(io.BytesIO(archive.read(code+'.png'))).convert('RGBA')
                     flag.thumbnail((max(1,round(pw*.07)),max(1,round(ph*.075))),Image.Resampling.LANCZOS)
                     panel.alpha_composite(flag,(round(offset+margin),round(ph*.06)))
-                cell('country_'+side,country.upper(),offset+pw*.125,ph*.098,pw*.34,ph*.095,ph*.055,cfg['country_color'])
+                cell('country_'+side,country.upper(),offset+pw*.125,ph*.098,pw*.34,ph*.095,ph*.070,cfg['country_color'])
                 draw.line((round(offset+margin),round(ph*.18),round(offset+half-margin),round(ph*.18)),fill=tuple(cfg['accent_color']),width=max(2,round(H/270)))
-                cell('headers',cfg['player_header_'+side],offset+margin,ph*.24,pw*.265,ph*.05,ph*.029,cfg['accent_color'])
-                cell('headers',cfg['ranking_header_'+side],offset+pw*.335,ph*.24,pw*.13,ph*.05,ph*.029,cfg['accent_color'])
+                cell('headers',cfg['player_header_'+side],offset+margin,ph*.24,pw*.265,ph*.065,ph*.038,cfg['accent_color'])
+                cell('headers',cfg['ranking_header_'+side],offset+pw*.335,ph*.24,pw*.13,ph*.065,ph*.038,cfg['accent_color'])
                 for i in range(count):
                     y=ph*.31+row_h*(i+.5)
-                    cell('name_'+side+'_'+str(i+1),cfg.get('name_'+side+'_'+str(i+1),''),offset+margin,y,pw*.275,row_h*.72,ph*.037,cfg['panel_text_color'])
-                    cell('rank_'+side+'_'+str(i+1),cfg.get('rank_'+side+'_'+str(i+1),''),offset+pw*.335,y,pw*.13,row_h*.72,ph*.035,cfg['panel_text_color'])
+                    cell('name_'+side+'_'+str(i+1),cfg.get('name_'+side+'_'+str(i+1),''),offset+margin,y,pw*.275,row_h*.72,ph*.049,cfg['panel_text_color'])
+                    cell('rank_'+side+'_'+str(i+1),cfg.get('rank_'+side+'_'+str(i+1),''),offset+pw*.335,y,pw*.13,row_h*.72,ph*.046,cfg['panel_text_color'])
                     if i<count-1:
                         yy=round(ph*.31+row_h*(i+1))
                         draw.line((round(offset+margin),yy,round(offset+half-margin),yy),fill=tuple(cfg['divider_color']),width=max(1,round(H/1080)))
@@ -377,12 +381,12 @@ def register(namespace):
                 flag=Image.open(io.BytesIO(archive.read(code+'.png'))).convert('RGBA')
             flag.thumbnail((round(pw*.17),round(ph*.085)),Image.Resampling.LANCZOS)
             panel.alpha_composite(flag,(pad,round(ph*.045)))
-        label('country',country,ph*.19,ph*.115,ph*.061,cfg['country_color'],True)
+        label('country',country,ph*.19,ph*.115,ph*.076,cfg['country_color'],True)
         count=int(c.clamp_number(cfg.get('row_count'),1,12,5))
         row_h=ph*.70/count
         for index in range(count):
             y=ph*.255+row_h*(index+.5)
-            label('player_'+str(index+1),cfg.get('player_'+str(index+1),''),y,row_h*.72,ph*.041,cfg['panel_text_color'])
+            label('player_'+str(index+1),cfg.get('player_'+str(index+1),''),y,row_h*.72,ph*.058,cfg['panel_text_color'])
             if index<count-1:
                 line_y=round(ph*.255+row_h*(index+1))
                 draw.line((pad,line_y,pw-pad,line_y),fill=tuple(cfg['divider_color']),width=max(1,round(H/1080)))

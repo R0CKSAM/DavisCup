@@ -4023,6 +4023,9 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
                     lo,hi=(-100,100) if 'offset_' in field else (10,200) if 'size_pct' in field else (0,200) if field.startswith('image_') else (0,100)
                     config[field]=clamp_number(config[field],lo,hi,value)
         if key=='t13':
+            if ' '.join(config['rail_text'].upper().split())=='BILLI JEAN KING CUP 2026':
+                config['rail_text']='BILLIE JEAN KING CUP 2026'
+            config['rail_text']=config['rail_text'].upper()
             config['rail_font_size']=clamp_number(candidate.get('rail_font_size') if isinstance(candidate,dict) else None,8,180,default['rail_font_size'])
             config['show_logo']=bool(config.get('show_logo',True))
             for field in ('auto_text_height','auto_image_frame'):
