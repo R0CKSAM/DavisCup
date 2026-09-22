@@ -40,16 +40,16 @@ def news_layout(c,cfg,W,H):
         cairo,Pango,_=modules
         context=cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32,1,1))
         layout=c._pango_layout(text,c.ShapedFont(c.text_font_family(cfg,'headline',text),size,'bold'),context)
-        layout.set_width(max(1,width-round(80*H/1080))*Pango.SCALE)
+        layout.set_width(max(1,width-round(92*H/1080))*Pango.SCALE)
         layout.set_wrap(Pango.WrapMode.WORD_CHAR)
-        requested=layout.get_pixel_size()[1]+round(80*H/1080)
+        requested=layout.get_pixel_size()[1]+round(92*H/1080)
     else:
         font=c.text_font(cfg,'headline',size,'bold')
         draw=ImageDraw.Draw(Image.new('RGB',(1,1)))
-        available=max(1,width-round(80*H/1080))
+        available=max(1,width-round(92*H/1080))
         lines=sum(max(1,int(c.text_bbox(draw,line,font)[0]/available)+1) for line in text.split('\n'))
-        requested=round(lines*size*1.3+80*H/1080)
-    height=max(round(H*.12),min(round(H*.22),requested))
+        requested=round(lines*size*1.3+92*H/1080)
+    height=max(round(H*.16),min(round(H*.30),requested))
     if not cfg.get('auto_text_height',True):
         height=round(H*cfg.get('headline_height_pct',16)/100)
     top=round(H*.18);gap=round(H*.024)
@@ -76,14 +76,17 @@ def news_text_layer(c,cfg,role,size):
     w,h=size
     value=c.apply_text_case(cfg,role,cfg.get(role,''))
     if role=='headline':
-        value=' '.join(value.split())
+        paragraphs=[' '.join(line.split()) for line in value.replace('\\n','\n').splitlines() if line.strip()]
+        value='\n'.join(paragraphs[:1]+[' '.join(paragraphs[1:])]) if len(paragraphs)>1 else (paragraphs[0] if paragraphs else '')
+    max_lines=cfg.get('_news_max_lines',2)
     background=c.normalize_rgb(cfg.get(role+'_box_color'),(0,60,46))
     layer=Image.new('RGBA',size,(*background,round(255*cfg['box_opacity_pct']/100)))
     if not value.strip():
         return layer
     color,requested=c.styled_text(cfg,role,c.readable_text_colors(background)[0],
                                  round(cfg[role+'_font_size']*cfg['_news_scale']))
-    padding=max(1,round(24*cfg['_news_scale']))
+    padding=max(1,round(cfg.get('_news_padding',24)*cfg['_news_scale']))
+    vertical=cfg.get('_news_vertical_align','center' if role=='headline' else 'top')
     aw,ah=max(1,w-padding*2),max(1,h-padding*2)
     modules=c._load_pango_modules()
     if modules:
@@ -103,14 +106,15 @@ def news_text_layer(c,cfg,role,size):
         while lo<hi:
             mid=(lo+hi+1)//2
             ink,logical=layout(mid).get_pixel_extents()
-            if max(ink.height,logical.height)<=ah and ink.width<=aw and (role!='headline' or layout(mid).get_line_count()<=2):
+            if max(ink.height,logical.height)<=ah and ink.width<=aw and (role!='headline' or layout(mid).get_line_count()<=max_lines):
                 lo=mid
             else:
                 hi=mid-1
         text=layout(lo)
         ink,logical=text.get_pixel_extents()
         context.set_source_rgb(*(channel/255 for channel in color))
-        context.move_to(padding,min(padding,padding-ink.y))
+        y=((h-ink.height)/2 if vertical=='center' else h-padding-ink.height if vertical=='bottom' else padding)-ink.y
+        context.move_to(padding,y)
         PangoCairo.show_layout(context,text)
         surface.flush()
         pixels=Image.frombuffer('RGBA',size,bytes(surface.get_data()),'raw','BGRa',0,1)
@@ -139,12 +143,20 @@ def news_text_layer(c,cfg,role,size):
     while lo<hi:
         mid=(lo+hi+1)//2
         *_,bb=layout(mid)
-        if bb[2]-bb[0]<=aw and bb[3]-bb[1]<=ah and (role!='headline' or len(layout(mid)[1].split('\n'))<=2): lo=mid
+        if bb[2]-bb[0]<=aw and bb[3]-bb[1]<=ah and (role!='headline' or len(layout(mid)[1].split('\n'))<=max_lines): lo=mid
         else: hi=mid-1
     font,text,spacing,bb=layout(lo)
     align=cfg[role+'_align']
     x=padding if align=='left' else w-padding-(bb[2]-bb[0]) if align=='right' else (w-bb[2]+bb[0])/2
-    draw.multiline_text((x-bb[0],padding-bb[1]),text,font=font,fill=(*color,255),spacing=spacing,align=align)
+    text_layer=Image.new('RGBA',size)
+    ImageDraw.Draw(text_layer).multiline_text((x-bb[0],padding-bb[1]),text,font=font,fill=(*color,255),spacing=spacing,align=align)
+    bounds=text_layer.getchannel('A').getbbox()
+    if vertical!='top' and bounds:
+        ink=text_layer.crop(bounds)
+        y=round((h-ink.height)/2) if vertical=='center' else h-padding-ink.height
+        layer.alpha_composite(ink,(bounds[0],y))
+    else:
+        layer.alpha_composite(text_layer)
     return layer
 
 
@@ -191,7 +203,7 @@ def render_news(c,image,cfg):
     if ' '.join(rail_value.upper().split())=='BILLI JEAN KING CUP 2026':
         rail_value='BILLIE JEAN KING CUP 2026'
     rail_cfg=dict(cfg,headline=rail_value,headline_align='center',headline_font_size=cfg.get('rail_font_size',78),text_styles=rail_styles,
-                  box_opacity_pct=0,_news_scale=H/1080)
+                  box_opacity_pct=0,_news_scale=H/1080,_news_max_lines=1)
     text=news_text_layer(c,rail_cfg,'headline',(rail[3]-2*inset,rail[2]-2*inset)).rotate(90,expand=True)
     panel(rail,(3,30,77) if c._competition_theme.active(cfg) else (0,54,42),text)
     if cfg.get('show_logo',True) and (not c._competition_theme.active(cfg) or cfg.get('logo_path')):
@@ -292,6 +304,38 @@ def register(namespace):
         for side in ('a','b'):
             defaults['t22']['name_'+side+'_'+str(i)]=''
             defaults['t22']['rank_'+side+'_'+str(i)]=''
+
+    defaults['t23']=dict(template='t23',canvas_size='HD  (1920x1080)',
+        headline='Vishal Uppal\nPrediction',subject='Semifinalist\n\n1. a\n2. b',
+        subject_align='left',subject_vertical_align='center',subject_font_size=72,
+        background_color=[3,30,77],accent_color=[210,255,36],text_styles={},rows=[])
+
+    def render_prediction(cfg):
+        W,H=c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
+        source=c.load_photo(str(root/'prediction_background_front.png'))
+        if source is None:
+            raise RuntimeError('Predection artwork is missing: prediction_background_front.png')
+        image=source.convert('RGBA').resize((W,H),Image.Resampling.LANCZOS)
+        # Coordinates follow the fixed artwork, leaving the bevels and angled ends clear.
+        def text(value,role,box,font_size,color):
+            x,y,w,h=(round(v*s) for v,s in zip(box,(W/1672,H/941,W/1672,H/941)))
+            text_cfg={role:value,role+'_font_size':font_size*1080/941,
+                      role+'_align':'left',role+'_box_color':[3,30,77],
+                      'text_styles':{role:{'color':color}},
+                      'box_opacity_pct':0,'_news_scale':H/1080,'_news_max_lines':1,'_news_padding':8}
+            if role=='subject':
+                text_cfg['subject_align']=cfg.get('subject_align','left')
+                text_cfg['subject_font_size']=cfg.get('subject_font_size',72)
+                text_cfg['_news_vertical_align']=cfg.get('subject_vertical_align','center')
+            image.alpha_composite(news_text_layer(c,text_cfg,role,(w,h)),(x,y))
+        lines=cfg.get('headline','').replace('\\n','\n').split('\n',1)
+        if len(lines)==1:
+            text(lines[0],'headline',(788,186,714,184),90,[255,255,255])
+        else:
+            text(lines[0],'headline',(788,183,714,103),90,[255,255,255])
+            text(' '.join(lines[1].split()),'headline',(788,277,714,103),90,[210,255,36])
+        text(cfg.get('subject',''),'subject',(776,439,752,292),54,[255,255,255])
+        return image
 
     def render_player_list(cfg):
         W,H=c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
@@ -590,6 +634,8 @@ def register(namespace):
 
     def render(cfg):
         key = cfg['template']
+        if key=='t23':
+            return render_prediction(cfg)
         if key in ('t21','t22'):
             return render_player_list(cfg)
         if key == 't20':
@@ -772,4 +818,4 @@ def register(namespace):
     namespace['TEXT_STYLE_TARGETS']['t21']=[('all','All text'),('country','Country')]+[('player_'+str(i),'Player '+str(i)) for i in range(1,13)]
     namespace['TEXT_STYLE_TARGETS']['t22']=[('all','All text'),('country_a','Left country'),('country_b','Right country'),('headers','Column headings')]+[(field+'_'+side+'_'+str(i),('Left' if side=='a' else 'Right')+' '+field+' '+str(i)) for side in ('a','b') for i in range(1,13) for field in ('name','rank')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List','COUNTRY VS']
+    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List','COUNTRY VS','Predection']

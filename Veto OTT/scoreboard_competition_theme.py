@@ -19,11 +19,13 @@ def apply(template, cfg, competition):
     if competition != BILLIE:
         cfg['competition_theme'] = 'davis-cup'
         return cfg
-    if template in ('t20','t21','t22'):
+    if template in ('t20','t21','t22','t23'):
         cfg.update(competition_theme=BILLIE,theme_revision=1)
         return cfg
     if cfg.get('competition_theme') == BILLIE and cfg.get('theme_revision') == 1:
         return cfg
+    if template == 't14':
+        cfg['player_outline_px'] = 0
     navy = {'panel_color','band_green','band_green_dark','stats_green','country_text_color',
             'title_box_color','headline_box_color','subject_box_color','green_color',
             'text_b_color','bottom_row_color','top_text_color','top_score_color',

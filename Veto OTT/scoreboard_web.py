@@ -428,9 +428,9 @@ class ScoreboardWebRuntime:
             country = ''
             if not config.get('media_path'):
                 raise ValueError('Upload an image or video first.')
-        if template=='t13':
+        if template in ('t13','t23'):
             country=''
-        if not player or (not country and template not in ('t8','t13')) or max(len(player),len(country)) > 100:
+        if not player or (not country and template not in ('t8','t13','t23')) or max(len(player),len(country)) > 100:
             raise ValueError('Enter player name and country (at most 100 characters each).')
         with self.lock:
             entries = self.list_templates(competition)
@@ -844,7 +844,7 @@ class ScoreboardWebRuntime:
                 "t8": list(self.core.T8_SIZES),
                 "t9": list(self.core.T9_SIZES),
                 "t14": list(self.core.T14_SIZES),
-                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20','t21','t22')},
+                **{key:list(self.core.BROADCAST_SIZES) for key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20','t21','t22','t23')},
             },
             "qualifier_countries": sorted(set(json.loads((self.app_dir / 'country_flags.json').read_text(encoding='utf-8-sig')).values()) | set(self.core.QUALIFIER_ALPHA3.values())),
             "flag_countries": [
@@ -895,6 +895,7 @@ class ScoreboardWebRuntime:
             "t20": (),
             "t21": ('background_path',),
             "t22": ('background_path',),
+            "t23": (),
         }[template]
         for key in keys:
             config[key] = self._safe_uploaded_path(config.get(key, ""))
