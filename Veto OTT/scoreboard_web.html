@@ -399,7 +399,8 @@ colorFields.t11=[['title_box_color','Title box'],['accent_color','Outline accent
 for(const key of ['t10','t12']){assetFields[key].push(['logo_path','Logo']);imageMoveChoices[key].push(['logo_path','Logo']);selectedLayer[key]='logo_path';}
 assetFields.t10.unshift(['photo_a','Left player image'],['photo_b','Right player image']);imageMoveChoices.t10.unshift(...imageMoveChoices.t9);selectedLayer.t10='photo_a';
 imageMoveChoices.t11=[['band','Whole band']];selectedLayer.t11='band';
-mainFields.t13=['canvas_size','headline','subject','headline_font_size','subject_font_size','headline_align','subject_align','auto_text_height','headline_height_pct','subject_height_pct','auto_image_frame','box_opacity_pct','show_logo'];
+mainFields.t13=['canvas_size','rail_text','headline','subject','rail_font_size','headline_font_size','subject_font_size','headline_align','subject_align','auto_text_height','headline_height_pct','subject_height_pct','auto_image_frame','box_opacity_pct','show_logo'];
+Object.assign(labels,{rail_text:'Left column text',rail_font_size:'Left column text size'});
 assetFields.t13=[['image_path','News image'],['logo_path','Logo'],['background_path','Background']];
 colorFields.t13=[['headline_box_color','Headline box'],['subject_box_color','Subject box'],['accent_color','Frame trim']];
 imageMoveChoices.t13=[['image_path','News image']];selectedLayer.t13='image_path';

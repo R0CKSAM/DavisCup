@@ -52,7 +52,7 @@ def news_layout(c,cfg,W,H):
     height=max(round(H*.12),min(round(H*.22),requested))
     if not cfg.get('auto_text_height',True):
         height=round(H*cfg.get('headline_height_pct',16)/100)
-    top=round(H*.27);gap=round(H*.024)
+    top=round(H*.18);gap=round(H*.024)
     maximum=round(H*.88)-top-height-gap
     if cfg.get('auto_text_height',True):
         value=c.apply_text_case(cfg,'subject',cfg.get('subject',''))
@@ -171,7 +171,7 @@ def render_news(c,image,cfg):
         fit=min((w-2*inset)/source.width,(h-2*inset)/source.height)
         fw=max(inset*2+1,round(source.width*fit)+inset*2)
         fh=max(inset*2+1,round(source.height*fit)+inset*2)
-        image_box=(x+(w-fw)//2,y+(h-fh)//2,fw,fh)
+        image_box=(x+(w-fw)//2,y,fw,fh)
     left=Image.new('RGBA',(image_box[2]-2*inset,image_box[3]-2*inset),(0,0,0,0))
     if source:
         scale=min(left.width/source.width,left.height/source.height)*cfg['image_size_pct']/100
@@ -184,7 +184,9 @@ def render_news(c,image,cfg):
         layer=news_text_layer(c,dict(cfg,_news_scale=H/1080,box_opacity_pct=0),role,(w-2*inset,h-2*inset))
         panel(box,c.normalize_rgb(cfg.get(role+'_box_color'),(0,65,49)),layer)
     rail=(round(W*.025),round(H*.09),round(W*.085),round(H*.83))
-    rail_cfg=dict(cfg,headline='NEWS HEADLINE',headline_align='center',headline_font_size=70,
+    rail_styles=copy.deepcopy(cfg.get('text_styles',{}))
+    rail_styles['headline']=copy.deepcopy(rail_styles.get('rail_text',{}))
+    rail_cfg=dict(cfg,headline=cfg.get('rail_text','Billi Jean King cup 2026'),headline_align='center',headline_font_size=cfg.get('rail_font_size',70),text_styles=rail_styles,
                   box_opacity_pct=0,_news_scale=H/1080)
     text=news_text_layer(c,rail_cfg,'headline',(rail[3]-2*inset,rail[2]-2*inset)).rotate(90,expand=True)
     panel(rail,(3,30,77) if c._competition_theme.active(cfg) else (0,54,42),text)
@@ -218,6 +220,7 @@ def register(namespace):
                    auto_text_height=True,headline_height_pct=16,subject_height_pct=40,auto_image_frame=True,
                    background_color=[0,30,40],accent_color=[38,199,153],text_styles={},rows=[],
                    headline='NEWS HEADLINE',subject='',headline_font_size=68,subject_font_size=42,
+                   rail_text='Billi Jean King cup 2026',rail_font_size=70,
                    headline_align='center',subject_align='left',headline_box_color=[0,68,52],
                    subject_box_color=[0,68,52],box_opacity_pct=94,
                    image_offset_x_pct=0,image_offset_y_pct=0,image_size_pct=100),
@@ -745,7 +748,7 @@ def register(namespace):
         namespace['DEFAULT_CONFIGS'][key]=copy.deepcopy(default)
         namespace['RENDERERS'][key]=render
         namespace['TEXT_STYLE_TARGETS'][key]=[('all','All text')]
-    namespace['TEXT_STYLE_TARGETS']['t13']=[('all','All text'),('headline','Headline'),('subject','Subject')]
+    namespace['TEXT_STYLE_TARGETS']['t13']=[('all','All text'),('rail_text','Left column'),('headline','Headline'),('subject','Subject')]
     namespace['TEXT_STYLE_TARGETS']['t10']=[('all','All text'),('title','Title'),('subtitle','Subtitle'),
         ('player_a','Left player'),('player_b','Right player'),('country_a','Left country'),
         ('country_b','Right country'),('versus','VS')]
