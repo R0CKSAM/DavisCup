@@ -249,7 +249,7 @@ def register(namespace):
                    text_a_color=[255,255,255],text_b_color=[0,92,57],
                    background_color=[0,0,0],text_styles={},rows=[]),
         't17':dict(canvas_size='HD  (1920x1080)',text='YOUR TEXT HERE',
-                   band_x_pct=50,band_y_pct=82,band_size_pct=100,overlay_opacity_pct=100,
+                   band_x_pct=50,band_y_pct=90,band_size_pct=90,overlay_opacity_pct=100,
                    green_color=[0,92,57],accent_color=[20,205,70],text_color=[255,255,255],
                    background_color=[0,0,0],text_styles={},rows=[]),
         't18':dict(canvas_size='HD  (1920x1080)',player_a='Sumit Nagal',player_b='Hyeon Chung',
