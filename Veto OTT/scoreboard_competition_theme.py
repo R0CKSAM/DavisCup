@@ -19,7 +19,7 @@ def apply(template, cfg, competition):
     if competition != BILLIE:
         cfg['competition_theme'] = 'davis-cup'
         return cfg
-    if template in ('t20','t21','t22','t23'):
+    if template in ('t20','t21','t22','t23','t24'):
         cfg.update(competition_theme=BILLIE,theme_revision=1)
         return cfg
     if cfg.get('competition_theme') == BILLIE and cfg.get('theme_revision') == 1:

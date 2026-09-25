@@ -4006,7 +4006,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
     size_options = {
         "t1":T1_SIZES,"t2":T2_SIZES,"t3":T3_SIZES,"t4":T4_SIZES,"t5":T5_SIZES,"t6":T6_SIZES,"t7":T7_SIZES,"t8":T8_SIZES,"t9":T9_SIZES,
     }
-    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19','t20','t21','t22','t23')})
+    size_options.update({key:BROADCAST_SIZES for key in ('t10','t11','t12','t13','t14','t15','t16','t17','t18','t19','t20','t21','t22','t23','t24')})
     result: Dict[str, Dict] = {}
     for key, default in DEFAULT_CONFIGS.items():
         config = copy.deepcopy(default)
@@ -4023,7 +4023,7 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
                 editable[field]=config[field] if config.get(field) in choices else default[field]
             config=copy.deepcopy(default)
             config.update(editable)
-        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20','t21','t22'):
+        if key in ('t10','t11','t12','t13','t15','t16','t17','t18','t19','t20','t21','t22','t24'):
             config = {field:config.get(field,value) for field,value in default.items()}
             for field,value in default.items():
                 if isinstance(value,str):

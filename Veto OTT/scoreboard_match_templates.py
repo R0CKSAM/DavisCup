@@ -337,6 +337,48 @@ def register(namespace):
         text(cfg.get('subject',''),'subject',(776,439,752,292),54,[255,255,255])
         return image
 
+    defaults['t24']=dict(template='t24',canvas_size='HD  (1920x1080)',
+        day='DAY 1',title='SEMIFINAL',first_name_a='CRISTINA',last_name_a='BUCSA',
+        first_name_b='LINDA',last_name_b='NOSKOVA',country_a='Spain',country_b='Czechia',
+        country_a_label='',country_b_label='',versus='VS',background_path='',
+        background_color=[3,30,77],accent_color=[210,255,36],text_styles={},rows=[])
+
+    def render_semi_finals(cfg):
+        W,H=c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
+        source=c.load_photo(cfg.get('background_path') or str(root/'semi_finals_background.png'))
+        if source is None:
+            raise RuntimeError('Semi Finals background is missing')
+        image=source.convert('RGBA').resize((W,H),Image.Resampling.LANCZOS)
+        draw=ImageDraw.Draw(image)
+        def text(role,value,x,y,width,height,size,variant='bold'):
+            value=c.apply_text_case(cfg,role,str(value).replace('\n',' '))
+            color,size=c.styled_text(cfg,role,(255,255,255),round(size*H/937))
+            factory=c.text_font_factory(cfg,role,variant,value)
+            font=c.fit_font(draw,value,round(width*W/1678),size,minimum=1,factory=factory)
+            while c.text_bbox(draw,value,font)[1]>height*H/937 and font.size>1:
+                font=factory(font.size-1)
+            c.draw_text_centered(draw,value,font,round(x*W/1678),round(y*H/937),color)
+        # Render flags at double size for smooth circular edges inside the silver rims.
+        for side,cx in (('a',488),('b',1182)):
+            code=c.qualifier_country_code(cfg['country_'+side])
+            if code:
+                with zipfile.ZipFile(root/'country_flags.zip') as archive:
+                    flag=Image.open(io.BytesIO(archive.read(code+'.png'))).convert('RGBA')
+                diameter=max(2,round(262*H/937))
+                flag=flag.resize((diameter*2,diameter*2),Image.Resampling.LANCZOS)
+                mask=Image.new('L',flag.size)
+                ImageDraw.Draw(mask).ellipse((0,0,flag.width-1,flag.height-1),fill=255)
+                flag.putalpha(mask)
+                flag=flag.resize((diameter,diameter),Image.Resampling.LANCZOS)
+                image.alpha_composite(flag,(round(cx*W/1678-diameter/2),round(515*H/937-diameter/2)))
+            text('country_'+side,cfg.get('country_'+side+'_label') or c.QUALIFIER_ALPHA3.get(code,'---'),cx,699,350,43,42)
+            text('first_name_'+side,cfg['first_name_'+side],cx,222,448,45,44,'regular')
+            text('last_name_'+side,cfg['last_name_'+side],cx,285,448,82,88)
+        text('day',cfg['day'],838,61,255,32,32)
+        text('title',cfg['title'],838,126,375,45,44)
+        text('versus',cfg['versus'],831,480,182,160,132,'bold_italic')
+        return image
+
     def render_player_list(cfg):
         W,H=c.BROADCAST_SIZES.get(cfg.get('canvas_size'),(1920,1080))
         source=c.load_photo(cfg.get('background_path') or str(root/'player_list_background.png'))
@@ -634,6 +676,8 @@ def register(namespace):
 
     def render(cfg):
         key = cfg['template']
+        if key=='t24':
+            return render_semi_finals(cfg)
         if key=='t23':
             return render_prediction(cfg)
         if key in ('t21','t22'):
@@ -818,4 +862,5 @@ def register(namespace):
     namespace['TEXT_STYLE_TARGETS']['t21']=[('all','All text'),('country','Country')]+[('player_'+str(i),'Player '+str(i)) for i in range(1,13)]
     namespace['TEXT_STYLE_TARGETS']['t22']=[('all','All text'),('country_a','Left country'),('country_b','Right country'),('headers','Column headings')]+[(field+'_'+side+'_'+str(i),('Left' if side=='a' else 'Right')+' '+field+' '+str(i)) for side in ('a','b') for i in range(1,13) for field in ('name','rank')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List','COUNTRY VS','Predection']
+    namespace['TEXT_STYLE_TARGETS']['t24']=[('all','All text'),('day','Day'),('title','Heading'),('first_name_a','Left first name'),('last_name_a','Left last name'),('first_name_b','Right first name'),('last_name_b','Right last name'),('country_a','Left country label'),('country_b','Right country label'),('versus','VS')]
+    namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List','COUNTRY VS','Predection','Semi Finals']
