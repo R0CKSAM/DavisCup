@@ -254,6 +254,7 @@ function persistWorkspace(){
 function competitionDefaults(){return boot.competition_defaults?.[competition]||boot.defaults}
 function applyCompetitionTheme(key,value){
  const defaults=competitionDefaults()[key],cfg={...defaults,...clone(value||{})};
+ if(key==='t24'&&value)for(const side of ['a','b']){if(!('player_'+side in value)&&['first_name_','last_name_'].some(prefix=>prefix+side in value))cfg['player_'+side]=[value['first_name_'+side],value['last_name_'+side]].filter(Boolean).join(' ')}
  if(competition!=='billie-jean-king-cup'||(value?.competition_theme===competition&&value?.theme_revision===1))return cfg;
  for(const [field,next] of Object.entries(defaults))if(!['rows','text_styles','header_text','title','subtitle','banner_text'].includes(field)&&(JSON.stringify(next)!==JSON.stringify(boot.defaults[key][field])||field==='background_path'||(key==='t1'&&field==='photo_path')))cfg[field]=clone(next);
  for(const field of ['header_text','title','subtitle','banner_text'])if(typeof cfg[field]==='string')cfg[field]=cfg[field].replaceAll('DAVIS CUP','BILLIE JEAN KING CUP').replaceAll('Davis Cup','Billie Jean King Cup');
@@ -446,7 +447,8 @@ mainFields.t23=['canvas_size','headline','subject','subject_align','subject_vert
 labels.subject_vertical_align='Subject vertical position';
 assetFields.t23=[];rowFields.t23=[];colorFields.t23=[];
 imageMoveChoices.t23=[];selectedLayer.t23='';
-mainFields.t24=['canvas_size','day','title','first_name_a','last_name_a','country_a','country_a_label','first_name_b','last_name_b','country_b','country_b_label','versus'];
+mainFields.t24=['canvas_size','match_mode','day','title','player_a','partner_a','country_a','country_a_label','player_b','partner_b','country_b','country_b_label','versus'];
+Object.assign(labels,{partner_a:'Left player 2 - full name',partner_b:'Right player 2 - full name'});
 assetFields.t24=[['background_path','Background image']];rowFields.t24=[];colorFields.t24=[];
 imageMoveChoices.t24=[];selectedLayer.t24='text:title';
 Object.assign(labels,{day:'Day',first_name_a:'Left first name',last_name_a:'Left last name',first_name_b:'Right first name',last_name_b:'Right last name'});
@@ -540,7 +542,7 @@ function selectQueueItem(index){
  const item=queueItems[index];if(!item)return;template=item.template;$('template').value=template;configs[template]=clone(item.config);selectedSaved='';selectedQueue=index;history=[];historyIndex=-1;commit();buildEditor();renderTemplateOptions();renderPresetMenu();scheduleRender(false);renderQueue();setError();
 }
 function syncQueueSelection(){if(selectedQueue>=0&&queueSnapshotKey(queueItems[selectedQueue])!==currentSnapshotKey()){selectedQueue=-1;renderQueue()}}
-function getConfig(){return configs[template]}
+function getConfig(){const cfg=configs[template];if(template==='t24'&&cfg)for(const side of ['a','b']){const key='player_'+side;if(!(key in cfg))cfg[key]=[cfg['first_name_'+side],cfg['last_name_'+side]].filter(Boolean).join(' ')}return cfg}
 function commit(){history=history.slice(0,historyIndex+1);history.push(clone(configs));if(history.length>60)history.shift();historyIndex=history.length-1;persistWorkspace();syncHistory()}
 function syncHistory(){syncProjectLock()}
 function restore(index){if(index<0||index>=history.length)return;historyIndex=index;configs=clone(history[index]);buildEditor();scheduleRender(false);syncHistory()}
@@ -548,8 +550,11 @@ function setError(message=''){const box=$('error');box.textContent=message;box.s
 function markChanged(rebuild=false){commit();if(rebuild)buildEditor();scheduleRender()}
 
 function scalarField(key,value,setter){
+ if(template==='t24'&&['country_a_label','country_b_label'].includes(key))return `<div class="field"><label>${key==='country_a_label'?'Left':'Right'} country label override</label><input data-scalar="${key}" type="text" placeholder="${esc(getConfig()[key==='country_a_label'?'country_a':'country_b']||'')}" value="${esc(value||'')}"></div>`;
+ if(template==='t24'&&key==='match_mode')return `<div class="field"><label>Match format</label><div class="button-row">${['Singles','Doubles'].map(mode=>`<label class="inline-check"><input type="radio" name="semiMatchMode" data-scalar="match_mode" value="${mode}" ${(value||'Singles')===mode?'checked':''}>${mode}</label>`).join('')}</div></div>`;
+ if(template==='t24'&&key.startsWith('partner_')&&getConfig().match_mode!=='Doubles')return '';
  if(key==='stats_background'&&competition!=='billie-jean-king-cup')return '';
- const label=template==='t23'&&key==='headline'?'Heading':labels[key]||key.replaceAll('_',' ');let control='';
+ const label=template==='t24'&&['player_a','player_b'].includes(key)?(key==='player_a'?'Left':'Right')+' player 1 - full name':template==='t23'&&key==='headline'?'Heading':labels[key]||key.replaceAll('_',' ');let control='';
  if(template==='t23'&&key==='subject_vertical_align')return `<div class="field"><label>${esc(label)}</label><select data-scalar="${key}">${['top','center','bottom'].map(x=>option(x,x,value||'center')).join('')}</select></div>`;
  if(template==='t23'&&key==='subject_font_size')return `<div class="field"><label>Subject font size</label><input data-scalar="${key}" type="number" min="16" max="180" step="1" value="${esc(value??72)}"></div>`;
  if(typeof value==='boolean')return `<div class="field check"><input type="checkbox" data-scalar="${key}" ${value?'checked':''}><label>${esc(label)}</label></div>`;
@@ -589,7 +594,7 @@ async function uploadImageFile(file,key){
 }
 function bindEditor(){
  if($('customMedia'))$('customMedia').onchange=async()=>{const file=$('customMedia').files[0];if(!file||uploadBusy||presetSaving)return;uploadBusy=true;syncProjectLock();try{if(file.size>512*1024*1024)throw Error('Maximum upload size is 512 MB.');document.body.classList.add('busy');$('mediaUploadStatus').textContent='Uploading and validating...';const response=await fetch('/api/media/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Filename':encodeURIComponent(file.name)},body:file});const result=await response.json();if(!response.ok)throw Error(result.error||'Upload failed');Object.assign(getConfig(),result,{media_name:file.name.replace(/\.[^.]+$/,'')});selectedSaved='';markChanged(true)}catch(error){setError(error.message)}finally{uploadBusy=false;document.body.classList.remove('busy');syncProjectLock();if($('mediaUploadStatus'))$('mediaUploadStatus').textContent=''}};
- document.querySelectorAll('[data-scalar]').forEach(el=>{const update=()=>{const key=el.dataset.scalar,val=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;if(key.includes('.')){const [base,index]=key.split('.');getConfig()[base][+index]=val}else getConfig()[key]=val};el.onchange=()=>{update();markChanged()};if(el.matches('input[type=text],textarea'))el.oninput=()=>{update();scheduleRender()}});
+ document.querySelectorAll('[data-scalar]').forEach(el=>{const update=()=>{const key=el.dataset.scalar,val=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;if(key.includes('.')){const [base,index]=key.split('.');getConfig()[base][+index]=val}else getConfig()[key]=val};el.onchange=()=>{update();markChanged(el.dataset.scalar==='match_mode')};if(el.matches('input[type=text],textarea'))el.oninput=()=>{update();scheduleRender()}});
  document.querySelectorAll('[data-color]').forEach(el=>el.oninput=()=>{getConfig()[el.dataset.color]=rgb(el.value);markChanged()});
  document.querySelectorAll('[data-upload]').forEach(el=>el.onchange=async()=>{const file=el.files[0];if(!file)return;try{await uploadImageFile(file,el.dataset.upload)}catch(e){setError(e.message)}});
  document.querySelectorAll('[data-remove-image]').forEach(el=>el.onclick=()=>{setImagePath(el.dataset.removeImage,'');markChanged(true)});

@@ -4014,6 +4014,13 @@ def normalise_project_configs(saved: Any) -> Dict[str, Dict]:
         if isinstance(candidate, dict):
             config.update(copy.deepcopy(candidate))
         config["template"] = key
+        if key=='t24' and isinstance(candidate,dict):
+            for side in ('a','b'):
+                field='player_'+side
+                if field not in candidate and any(part+'_'+side in candidate for part in ('first_name','last_name')):
+                    config[field]=' '.join(str(candidate.get(part+'_'+side,'')).strip() for part in ('first_name','last_name')).strip()
+        if key=='t24' and config.get('match_mode') not in ('Singles','Doubles'):
+            config['match_mode']='Singles'
         if key=='t23':
             # Copy and subject typography are editable; the artwork stays fixed.
             editable={field:str(config[field])[:2000] for field in ('headline','subject')}

@@ -338,6 +338,8 @@ def register(namespace):
         return image
 
     defaults['t24']=dict(template='t24',canvas_size='HD  (1920x1080)',
+        match_mode='Singles',partner_a='',partner_b='',
+        player_a='CRISTINA BUCSA',player_b='LINDA NOSKOVA',
         day='DAY 1',title='SEMIFINAL',first_name_a='CRISTINA',last_name_a='BUCSA',
         first_name_b='LINDA',last_name_b='NOSKOVA',country_a='Spain',country_b='Czechia',
         country_a_label='',country_b_label='',versus='VS',background_path='',
@@ -354,9 +356,15 @@ def register(namespace):
             value=c.apply_text_case(cfg,role,str(value).replace('\n',' '))
             color,size=c.styled_text(cfg,role,(255,255,255),round(size*H/937))
             factory=c.text_font_factory(cfg,role,variant,value)
-            font=c.fit_font(draw,value,round(width*W/1678),size,minimum=1,factory=factory)
-            while c.text_bbox(draw,value,font)[1]>height*H/937 and font.size>1:
-                font=factory(font.size-1)
+            lo,hi=1,size
+            while lo<hi:
+                mid=(lo+hi+1)//2
+                tw,th=c.text_bbox(draw,value,factory(mid))
+                if tw<=width*W/1678 and th<=height*H/937:
+                    lo=mid
+                else:
+                    hi=mid-1
+            font=factory(lo)
             c.draw_text_centered(draw,value,font,round(x*W/1678),round(y*H/937),color)
         # Render flags at double size for smooth circular edges inside the silver rims.
         for side,cx in (('a',488),('b',1182)):
@@ -371,9 +379,15 @@ def register(namespace):
                 flag.putalpha(mask)
                 flag=flag.resize((diameter,diameter),Image.Resampling.LANCZOS)
                 image.alpha_composite(flag,(round(cx*W/1678-diameter/2),round(515*H/937-diameter/2)))
-            text('country_'+side,cfg.get('country_'+side+'_label') or c.QUALIFIER_ALPHA3.get(code,'---'),cx,699,350,43,42)
-            text('first_name_'+side,cfg['first_name_'+side],cx,222,448,45,44,'regular')
-            text('last_name_'+side,cfg['last_name_'+side],cx,285,448,82,88)
+            label=str(cfg.get('country_'+side+'_label','')).strip() or str(cfg.get('country_'+side,'')).strip()
+            text('country_'+side,label.upper(),cx,699,350,43,42)
+            if cfg.get('match_mode')=='Doubles':
+                name=cfg['player_'+side]
+                text('player_1_'+side,name,cx,231,448,53,52)
+                text('partner_'+side,cfg.get('partner_'+side,''),cx,304,448,53,52)
+                draw.line((round((cx-155)*W/1678),round(267*H/937),round((cx+155)*W/1678),round(267*H/937)),fill=tuple(cfg['accent_color']),width=max(1,round(2*H/937)))
+            else:
+                text('player_1_'+side,cfg['player_'+side],cx,267,448,105,78)
         text('day',cfg['day'],838,61,255,32,32)
         text('title',cfg['title'],838,126,375,45,44)
         text('versus',cfg['versus'],831,480,182,160,132,'bold_italic')
@@ -862,5 +876,5 @@ def register(namespace):
     namespace['TEXT_STYLE_TARGETS']['t21']=[('all','All text'),('country','Country')]+[('player_'+str(i),'Player '+str(i)) for i in range(1,13)]
     namespace['TEXT_STYLE_TARGETS']['t22']=[('all','All text'),('country_a','Left country'),('country_b','Right country'),('headers','Column headings')]+[(field+'_'+side+'_'+str(i),('Left' if side=='a' else 'Right')+' '+field+' '+str(i)) for side in ('a','b') for i in range(1,13) for field in ('name','rank')]
     namespace['WEB_TEMPLATE_KEYS']+=tuple(defaults)
-    namespace['TEXT_STYLE_TARGETS']['t24']=[('all','All text'),('day','Day'),('title','Heading'),('first_name_a','Left first name'),('last_name_a','Left last name'),('first_name_b','Right first name'),('last_name_b','Right last name'),('country_a','Left country label'),('country_b','Right country label'),('versus','VS')]
+    namespace['TEXT_STYLE_TARGETS']['t24']=[('all','All text'),('day','Day'),('title','Heading'),('country_a','Left country label'),('country_b','Right country label'),('versus','VS'),('player_1_a','Left player 1'),('partner_a','Left player 2'),('player_1_b','Right player 1'),('partner_b','Right player 2')]
     namespace['WEB_TEMPLATE_NAMES']+=['Match Day','Coming Next','Quarter Finals','News Headline','Custom Band','Aston Band','Slug Band','Scoreboard Astern','Coming Next V2','Qualifier Band','Player List','COUNTRY VS','Predection','Semi Finals']
